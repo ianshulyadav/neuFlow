@@ -565,141 +565,22 @@ fun FullPlayer(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            androidx.compose.material3.ButtonGroup(
+            AnimatedPlaybackControls(
+                isPlayingProvider = { uiState.isPlaying },
+                onPrevious = onPreviousClick,
+                onPlayPause = onPlayPauseClick,
+                onNext = onNextClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                expandedRatio = 0.3f,
-                overflowIndicator = {}
-            ) {
-                val scope = this
-                customItem(
-                    buttonGroupContent = {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val cornerRadius by animateDpAsState(
-                            targetValue = if (isPressed) 12.dp else 28.dp,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "PrevCorner"
-                        )
-                        androidx.compose.material3.Button(
-                            onClick = onPreviousClick,
-                            modifier = with(scope) {
-                                Modifier
-                                    .animateWidth(interactionSource)
-                                    .weight(1f)
-                                    .height(76.dp)
-                            },
-                            interactionSource = interactionSource,
-                            shape = RoundedCornerShape(cornerRadius),
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = contentColor.copy(alpha = if (isDark) 0.08f else 0.06f),
-                                contentColor = contentColor
-                            ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_skip_previous),
-                                    contentDescription = "Previous Song",
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                        }
-                    },
-                    menuContent = {}
-                )
-                customItem(
-                    buttonGroupContent = {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val cornerRadius by animateDpAsState(
-                            targetValue = if (isPressed) 12.dp else 28.dp,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "PlayCorner"
-                        )
-                        androidx.compose.material3.Button(
-                            onClick = onPlayPauseClick,
-                            modifier = with(scope) {
-                                Modifier
-                                    .animateWidth(interactionSource)
-                                    .weight(1.2f)
-                                    .height(76.dp)
-                            },
-                            interactionSource = interactionSource,
-                            shape = RoundedCornerShape(cornerRadius),
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = dynamicAccentColor,
-                                contentColor = if (isDark) Color(0xFF1C1B1F) else Color.White
-                            ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = if (uiState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-                                    contentDescription = if (uiState.isPlaying) "Pause" else "Play",
-                                    modifier = Modifier.size(42.dp)
-                                )
-                            }
-                        }
-                    },
-                    menuContent = {}
-                )
-                customItem(
-                    buttonGroupContent = {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val cornerRadius by animateDpAsState(
-                            targetValue = if (isPressed) 12.dp else 28.dp,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "NextCorner"
-                        )
-                        androidx.compose.material3.Button(
-                            onClick = onNextClick,
-                            modifier = with(scope) {
-                                Modifier
-                                    .animateWidth(interactionSource)
-                                    .weight(1f)
-                                    .height(76.dp)
-                            },
-                            interactionSource = interactionSource,
-                            shape = RoundedCornerShape(cornerRadius),
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = contentColor.copy(alpha = if (isDark) 0.08f else 0.06f),
-                                contentColor = contentColor
-                            ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_skip_next),
-                                    contentDescription = "Next Song",
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                        }
-                    },
-                    menuContent = {}
-                )
-            }
+                height = 76.dp,
+                colorPrev = contentColor.copy(alpha = if (isDark) 0.08f else 0.06f),
+                colorNext = contentColor.copy(alpha = if (isDark) 0.08f else 0.06f),
+                colorPP = dynamicAccentColor,
+                tintPP = if (isDark) Color(0xFF1C1B1F) else Color.White,
+                tintPrev = contentColor,
+                tintNext = contentColor
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
