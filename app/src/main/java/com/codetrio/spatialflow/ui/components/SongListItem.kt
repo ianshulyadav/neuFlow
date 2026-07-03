@@ -27,14 +27,14 @@ import androidx.compose.animation.animateColor
 @Composable
 fun SongListItem(song: SongItem, isCurrentSong: Boolean, isPlaying: Boolean, showAlbumArt: Boolean = true, onClick: () -> Unit, onMoreOptions: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme; val transition = updateTransition(isCurrentSong, label = "hl")
-    val surfaceColor by transition.animateColor({ tween(400) }, label = "sc") { if (it) scheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent }
-    val textColor by transition.animateColor({ tween(400) }, label = "tc") { if (it) scheme.primary else scheme.onSurface }
+    val surfaceColor by transition.animateColor(transitionSpec = { tween(400) }, label = "sc") { if (it) scheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent }
+    val textColor by transition.animateColor(transitionSpec = { tween(400) }, label = "tc") { if (it) scheme.primary else scheme.onSurface }
     Surface(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick), RoundedCornerShape(16.dp), surfaceColor, tonalElevation = 0.dp) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (showAlbumArt) { Box(Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(scheme.surfaceVariant), contentAlignment = Alignment.Center) { AsyncImage(song.getAlbumArtUri(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } }
-            Column(Modifier.weight(1f)) { Text(song.title, style = MaterialTheme.typography.titleMedium, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal); Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Column(Modifier.weight(1f)) { Text(text = song.title, style = MaterialTheme.typography.titleMedium, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal); Text(text = song.artist, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             if (isCurrentSong && isPlaying) Box(Modifier.size(4.dp).clip(CircleShape).background(scheme.primary))
-            if (onMoreOptions != null) IconButton(onClick = onMoreOptions) { Icon(Icons.Rounded.MoreVert, null, tint = scheme.onSurfaceVariant) }
+            if (onMoreOptions != null) IconButton(onClick = onMoreOptions) { Icon(imageVector = Icons.Rounded.MoreVert, contentDescription = null, tint = scheme.onSurfaceVariant) }
         }
     }
 }

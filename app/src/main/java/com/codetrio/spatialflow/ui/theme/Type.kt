@@ -4,7 +4,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.*
-import androidx.compose.ui.text.googlefonts.Font as GFont
+import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.unit.em
@@ -21,15 +21,13 @@ val GoogleSansRounded = FontFamily(
 
 @OptIn(ExperimentalTextApi::class)
 val GoogleSansFlex = FontFamily(Font(R.font.google_flex, variationSettings = FontVariation.Settings(FontVariation.Setting("ROND", 0f))))
-val GoogleSansFlexNonRounded = GoogleSansFlex
 
 private val gProvider = GoogleFont.Provider("com.google.android.gms.fonts", "com.google.android.gms", R.array.com_google_android_gms_fonts_certs)
-val Montserrat = GoogleFont("Montserrat")
 val MontserratFamily = FontFamily(
-    GFont(googleFont = Montserrat, fontProvider = gProvider, weight = FontWeight.Black),
-    GFont(googleFont = Montserrat, fontProvider = gProvider, weight = FontWeight.Bold),
-    GFont(googleFont = Montserrat, fontProvider = gProvider, weight = FontWeight.SemiBold),
-    GFont(googleFont = Montserrat, fontProvider = gProvider, weight = FontWeight.Normal))
+    Font(googleFont = GoogleFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.Black),
+    Font(googleFont = GoogleFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.Bold),
+    Font(googleFont = GoogleFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.SemiBold),
+    Font(googleFont = GoogleFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.Normal))
 
 val Typography = Typography(
     displayLarge = TextStyle(fontFamily = MontserratFamily, fontWeight = FontWeight.SemiBold, fontSize = 60.sp, textGeometricTransform = TextGeometricTransform(scaleX = 1.5f), letterSpacing = (-0.02).em, lineHeight = 0.95.em),

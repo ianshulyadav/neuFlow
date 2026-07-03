@@ -56,38 +56,30 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.codetrio.spatialflow.data.lyrics.LyricLine
 import com.codetrio.spatialflow.data.lyrics.LyricWord
 import com.codetrio.spatialflow.data.lyrics.LyricsResult
+import com.codetrio.spatialflow.data.lyrics.Lyrics
+import com.codetrio.spatialflow.data.lyrics.LyricsSearchUiState
+import com.codetrio.spatialflow.data.lyrics.LyricsSearchResult
+import com.codetrio.spatialflow.data.lyrics.SyncedLine
+import com.codetrio.spatialflow.data.lyrics.SyncedWord
 import com.codetrio.spatialflow.model.SongItem
 import com.codetrio.spatialflow.ui.theme.GoogleSansRounded
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // ═══════════════════════════════════════════════════
 // COLOR CONFIG
 // ═══════════════════════════════════════════════════
-data class Lyrics(
-    val synced: String? = null,
-    val plain: String? = null
-)
-
-sealed interface LyricsSearchResult {
-    data class Found(val record: com.codetrio.spatialflow.data.lyrics.LrcLibResponse) : LyricsSearchResult
-}
-
-sealed interface LyricsSearchUiState {
-    object Idle : LyricsSearchUiState
-    object Loading : LyricsSearchUiState
-    data class PickResult(val results: List<LyricsSearchResult.Found>) : LyricsSearchUiState
-    data class NotFound(val message: String) : LyricsSearchUiState
-    data class Error(val message: String) : LyricsSearchUiState
-    object Success : LyricsSearchUiState
-}
-
 data class LyricsSheetColors(
     val container: Color, val content: Color,
     val controlContainer: Color, val controlContent: Color,
@@ -286,8 +278,25 @@ fun FullLyricsSheet(
                         }
                         true -> {
                             lyrics?.synced?.let { synced ->
+                                val mappedLines = synced.map { sLine ->
+                                    LyricLine(
+                                        startTimeMs = sLine.time.toLong(),
+                                        content = sLine.line,
+                                        isInterlude = sLine.line == "♪",
+                                        isWordByWord = !sLine.words.isNullOrEmpty(),
+                                        words = sLine.words?.map { sWord ->
+                                            LyricWord(
+                                                text = sWord.word,
+                                                absoluteStartTimeMs = sWord.time,
+                                                durationMs = 0L
+                                            )
+                                        } ?: emptyList(),
+                                        romanization = sLine.romanization,
+                                        translation = sLine.translation
+                                    )
+                                }
                                 SyncedLyricsList(
-                                    lines = synced, listState = syncedListState, playbackPositionFlow = playbackPositionFlow,
+                                    lines = mappedLines, listState = syncedListState, playbackPositionFlow = playbackPositionFlow,
                                     lyricsSyncOffset = lyricsSyncOffset, useAnimatedLyrics = true,
                                     animatedLyricsBlurEnabled = true, animatedLyricsBlurStrength = 2.5f,
                                     immersiveMode = immersiveMode, lyricsAlignment = lyricsAlignment,
@@ -344,7 +353,7 @@ fun FullLyricsSheet(
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             val ppCorner by animateDpAsState(if (isPlaying) 18.dp else 50.dp, spring(Spring.StiffnessLow), label = "pp")
                             Box(Modifier.size(78.dp).clip(RoundedCornerShape(ppCorner)).background(playPauseColor).clickable { hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlayPause() }, contentAlignment = Alignment.Center) {
-                                Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", onPlayPauseColor, Modifier.size(32.dp))
+                                Icon(imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = if (isPlaying) "Pause" else "Play", tint = onPlayPauseColor, modifier = Modifier.size(32.dp))
                             }
                             // Seek bar
                             val pos by playbackPositionFlow.collectAsStateWithLifecycle()
@@ -378,7 +387,7 @@ fun FullLyricsSheet(
                     .graphicsLayer { val w = size.width; translationX = w * (1f - swipeProgress.value); scaleX = 0.8f + swipeProgress.value * 0.2f; scaleY = 0.8f + swipeProgress.value * 0.2f }
                     .background(accentColor, RoundedCornerShape(if (isNext) 360.dp else 8.dp, if (isNext) 8.dp else 360.dp, if (isNext) 8.dp else 360.dp, if (isNext) 360.dp else 8.dp)),
                     contentAlignment = Alignment.Center) {
-                    Icon(if (isNext) Icons.Rounded.SkipNext else Icons.Rounded.SkipPrevious, null, onAccentColor, Modifier.size(48.dp))
+                    Icon(imageVector = if (isNext) Icons.Rounded.SkipNext else Icons.Rounded.SkipPrevious, contentDescription = null, tint = onAccentColor, modifier = Modifier.size(48.dp))
                 }
             }
         }
@@ -484,7 +493,7 @@ private fun LyricsSyncControls(offsetMillis: Int, onOffsetChange: (Int) -> Unit,
 }
 
 @Composable
-private fun SyncBtn(text: String, onClick: () -> Unit, weight: Float, container: Color, content: Color) {
+private fun RowScope.SyncBtn(text: String, onClick: () -> Unit, weight: Float, container: Color, content: Color) {
     FilledTonalButton(onClick, Modifier.weight(weight).fillMaxHeight(), shape = CircleShape, colors = ButtonDefaults.filledTonalButtonColors(containerColor = container, contentColor = content), contentPadding = PaddingValues(0.dp)) {
         Text(text, style = MaterialTheme.typography.labelSmall, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
@@ -513,19 +522,19 @@ private fun SyncedLyricsList(
     // Resolve current line
     LaunchedEffect(position, lines) {
         if (lines.isEmpty()) return@LaunchedEffect
-        currentLineIndex = lines.indexOfLast { it.time.toLong() <= position }.coerceAtLeast(0)
+        currentLineIndex = lines.indexOfLast { it.startTimeMs <= position }.coerceAtLeast(0)
         if (!hasAligned) { listState.scrollToItem(currentLineIndex); hasAligned = true; lastAutoScrolled = currentLineIndex; return@LaunchedEffect }
         if (listState.isScrollInProgress) return@LaunchedEffect
-        val duration = if (useAnimatedLyrics) ((lines.getOrNull(currentLineIndex + 1)?.time ?: (lines[currentLineIndex].time + 1000)) - lines[currentLineIndex].time).coerceIn(250, 2000) else 450
+        val duration = if (useAnimatedLyrics) ((lines.getOrNull(currentLineIndex + 1)?.startTimeMs ?: (lines[currentLineIndex].startTimeMs + 1000L)) - lines[currentLineIndex].startTimeMs).coerceIn(250L, 2000L) else 450L
         listState.animateScrollToItem(currentLineIndex)
         lastAutoScrolled = currentLineIndex
     }
 
     LazyColumn(modifier = modifier.fillMaxSize(), state = listState, contentPadding = contentPadding) {
-        itemsIndexed(lines, key = { i, l -> "${l.time}_$i" }) { index, line ->
+        itemsIndexed(lines, key = { i, l -> "${l.startTimeMs}_$i" }) { index, line ->
             if (line.content.isBlank()) { Spacer(Modifier.height(16.dp)) }
             else {
-                val nextTime = lines.getOrNull(index + 1)?.time ?: Int.MAX_VALUE
+                val nextTime = lines.getOrNull(index + 1)?.startTimeMs ?: Long.MAX_VALUE
                 val dist = if (currentLineIndex != -1) abs(currentLineIndex - index) else 100
                 LyricLineRow(line = line, nextTime = nextTime, position = position, distanceFromCurrent = dist,
                     useAnimatedLyrics = useAnimatedLyrics, animatedLyricsBlurEnabled = animatedLyricsBlurEnabled,
@@ -543,13 +552,13 @@ private fun SyncedLyricsList(
 // ═══════════════════════════════════════════════════
 @Composable
 private fun LyricLineRow(
-    line: LyricLine, nextTime: Int, position: Long, distanceFromCurrent: Int,
+    line: LyricLine, nextTime: Long, position: Long, distanceFromCurrent: Int,
     useAnimatedLyrics: Boolean, animatedLyricsBlurEnabled: Boolean, animatedLyricsBlurStrength: Float,
     immersiveMode: Boolean, lyricsAlignment: String, showTranslation: Boolean, showRomanization: Boolean,
     accentColor: Color, style: TextStyle, modifier: Modifier, onClick: () -> Unit
 ) {
     val lineEndTime = resolveLineEnd(line, nextTime)
-    val isCurrentLine = position in line.startTimeMs.toLong()..<lineEndTime
+    val isCurrentLine = position in line.startTimeMs..<lineEndTime
     val unhighlightedColor = LocalContentColor.current.copy(alpha = 0.45f)
 
     val lineColor by animateColorAsState(if (isCurrentLine) accentColor else unhighlightedColor, if (useAnimatedLyrics) spring(Spring.StiffnessVeryLow, Spring.DampingRatioMediumBouncy) else tween(250), label = "lc")
@@ -581,9 +590,9 @@ private fun LyricLineRow(
     }
 }
 
-private fun resolveLineEnd(line: LyricLine, nextTime: Int): Long {
-    val lastWord = line.words?.maxOfOrNull { it.absoluteStartTimeMs } ?: line.startTimeMs.toLong()
-    return maxOf(nextTime.toLong(), lastWord + 1L)
+private fun resolveLineEnd(line: LyricLine, nextTime: Long): Long {
+    val lastWord = line.words?.maxOfOrNull { it.absoluteStartTimeMs } ?: line.startTimeMs
+    return maxOf(nextTime, lastWord + 1L)
 }
 
 private fun sanitizeText(raw: String): String = raw.replace(Regex("""^v\d+:\s*""", RegexOption.IGNORE_CASE), "").trimStart()
@@ -600,28 +609,28 @@ private fun FetchLyricsDialog(
     if (uiState is LyricsSearchUiState.Success) return
     var forcePick by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.padding(24.dp).fillMaxWidth(), RoundedCornerShape(32.dp), MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
+        Surface(modifier = Modifier.padding(24.dp).fillMaxWidth(), shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 6.dp) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 when (uiState) {
                     LyricsSearchUiState.Idle -> {
                         Box(Modifier.size(72.dp).clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.MusicNote, null, MaterialTheme.colorScheme.onSecondaryContainer, Modifier.size(40.dp))
+                            Icon(imageVector = Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(40.dp))
                         }
                         Spacer(Modifier.height(20.dp))
                         currentSong?.let { s ->
-                            Text(s.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(s.artist, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
+                            Text(text = s.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(text = s.artist, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
                         }
                         Spacer(Modifier.height(12.dp))
-                        Text("Search online for lyrics?", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text = "Search online for lyrics?", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(24.dp))
 
                         // Force pick toggle card
-                        ElevatedCard(Modifier.fillMaxWidth(), RoundedCornerShape(20.dp), CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                        ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("Show options", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                    Text("Pick from multiple results", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f))
+                                    Text(text = "Show options", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    Text(text = "Pick from multiple results", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f))
                                 }
                                 Switch(forcePick, { forcePick = it }, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.onPrimary, checkedTrackColor = MaterialTheme.colorScheme.primary))
                             }
@@ -635,33 +644,33 @@ private fun FetchLyricsDialog(
                     }
                     LyricsSearchUiState.Loading -> {
                         CircularProgressIndicator(Modifier.size(48.dp), color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(16.dp)); Text("Searching…", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(16.dp)); Text(text = "Searching…", style = MaterialTheme.typography.titleMedium)
                     }
                     is LyricsSearchUiState.PickResult -> {
-                        Text("Select Lyrics", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(text = "Select Lyrics", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(16.dp))
                         uiState.results.forEach { r ->
                             OutlinedButton({ onPickResult(r); onDismiss() }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-                                    Text(r.record.name ?: "", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                    Text("${r.record.artistName}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(text = r.record.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text(text = "${r.record.artistName}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
                         }
                     }
                     is LyricsSearchUiState.NotFound -> {
-                        Icon(Icons.Rounded.SearchOff, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(16.dp)); Text("Not Found", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(8.dp)); Text(uiState.message, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(imageVector = Icons.Rounded.SearchOff, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(16.dp)); Text(text = "Not Found", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(8.dp)); Text(text = uiState.message, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(16.dp))
                         OutlinedButton({ onManualSearch(currentSong?.title ?: "", currentSong?.artist) }, Modifier.fillMaxWidth()) { Text("Search Manually") }
                         Spacer(Modifier.height(8.dp)); TextButton(onDismiss) { Text("Cancel") }
                     }
                     is LyricsSearchUiState.Error -> {
-                        Icon(Icons.Rounded.ErrorOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(16.dp)); Text("Error", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(8.dp)); Text(uiState.message, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(imageVector = Icons.Rounded.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(16.dp)); Text(text = "Error", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(8.dp)); Text(text = uiState.message, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(16.dp)); TextButton(onDismiss) { Text("OK") }
                     }
                 }

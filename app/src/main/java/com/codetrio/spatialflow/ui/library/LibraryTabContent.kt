@@ -1,7 +1,7 @@
 package com.codetrio.spatialflow.ui.library
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.codetrio.spatialflow.model.SongItem
 import com.codetrio.spatialflow.ui.components.SongListItem
-import androidx.compose.ui.text.style.TextOverflow
+import com.codetrio.spatialflow.ui.explore.AlbumCard
 import com.codetrio.spatialflow.ui.explore.ExploreItem
 
 @Composable
@@ -55,14 +55,17 @@ fun ArtistsContent(artists: List<ExploreItem>, onArtistClick: (String) -> Unit, 
     val scheme = MaterialTheme.colorScheme
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 80.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(artists, key = { it.id }) { artist ->
-            Surface(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clickable { onArtistClick(artist.id) }, RoundedCornerShape(16.dp), Color.Transparent, tonalElevation = 0.dp) {
+            Surface(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clickable { onArtistClick(artist.id) }, shape = RoundedCornerShape(16.dp), color = Color.Transparent, tonalElevation = 0.dp) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(Modifier.size(50.dp).clip(CircleShape).background(scheme.surfaceVariant), contentAlignment = Alignment.Center) {
                         if (artist.artworkUrl != null) AsyncImage(artist.artworkUrl, artist.title, Modifier.fillMaxSize())
-                        else Icon(Icons.Rounded.Person, null, modifier = Modifier.size(28.dp), tint = scheme.onSurfaceVariant)
+                        else Icon(imageVector = Icons.Rounded.Person, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(28.dp))
                     }
-                    Column(Modifier.weight(1f)) { Text(artist.title, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface); Text(artist.subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
-                    Icon(Icons.Rounded.ChevronRight, null, tint = scheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    Column(Modifier.weight(1f)) {
+                        Text(text = artist.title, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
+                        Text(text = artist.subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    }
+                    Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = null, tint = scheme.onSurfaceVariant.copy(alpha = 0.4f))
                 }
             }
         }
@@ -74,67 +77,19 @@ fun PlaylistsContent(playlists: List<ExploreItem>, onPlaylistClick: (String) -> 
     val scheme = MaterialTheme.colorScheme
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 80.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(playlists, key = { it.id }) { playlist ->
-            Surface(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clickable { onPlaylistClick(playlist.id) }, RoundedCornerShape(16.dp), Color.Transparent, tonalElevation = 0.dp) {
+            Surface(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clickable { onPlaylistClick(playlist.id) }, shape = RoundedCornerShape(16.dp), color = Color.Transparent, tonalElevation = 0.dp) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(scheme.surfaceVariant), contentAlignment = Alignment.Center) {
                         if (playlist.artworkUrl != null) AsyncImage(playlist.artworkUrl, playlist.title, Modifier.fillMaxSize())
-                        else Icon(Icons.Rounded.QueueMusic, null, modifier = Modifier.size(28.dp), tint = scheme.onSurfaceVariant)
+                        else Icon(imageVector = Icons.Rounded.QueueMusic, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(28.dp))
                     }
-                    Column(Modifier.weight(1f)) { Text(playlist.title, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface); Text(playlist.subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
-                    Icon(Icons.Rounded.ChevronRight, null, tint = scheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    Column(Modifier.weight(1f)) {
+                        Text(text = playlist.title, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
+                        Text(text = playlist.subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    }
+                    Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = null, tint = scheme.onSurfaceVariant.copy(alpha = 0.4f))
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun AlbumCard(title: String, subtitle: String, artworkUrl: String?, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (artworkUrl != null) {
-                    AsyncImage(
-                        model = artworkUrl,
-                        contentDescription = title,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.QueueMusic,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }

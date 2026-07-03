@@ -46,10 +46,10 @@ fun MiniPlayer(song: SongItem, isPlaying: Boolean, isCastConnecting: Boolean = f
                 MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontFamily = GoogleSansRounded, color = scheme.onPrimaryContainer.copy(alpha = 0.7f)), scheme.primaryContainer, canScroll = canScroll)
         }
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.onPrimary).clickable(pI, ind, enabled) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPrevious() }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.SkipPrevious, "Prev", modifier = Modifier.size(22.dp), tint = scheme.primary) }
+        Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.onPrimary).clickable(pI, ind, enabled) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPrevious() }, contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Rounded.SkipPrevious, contentDescription = "Prev", tint = scheme.primary, modifier = Modifier.size(22.dp)) }
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.primary).clickable(ppI, ind, enabled) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlayPause() }, contentAlignment = Alignment.Center) { Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", modifier = Modifier.size(22.dp), tint = scheme.onPrimary) }
+        Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.primary).clickable(ppI, ind, enabled) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlayPause() }, contentAlignment = Alignment.Center) { Icon(imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = if (isPlaying) "Pause" else "Play", tint = scheme.onPrimary, modifier = Modifier.size(22.dp)) }
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.onPrimary).clickable(nI, ind, enabled) { onNext() }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(22.dp), tint = scheme.primary) }
+        Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.onPrimary).clickable(nI, ind, enabled) { onNext() }, contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Rounded.SkipNext, contentDescription = "Next", tint = scheme.primary, modifier = Modifier.size(22.dp)) }
     }
 }

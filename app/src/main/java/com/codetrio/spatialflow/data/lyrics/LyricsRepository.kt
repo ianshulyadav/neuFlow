@@ -97,7 +97,7 @@ class LyricsRepository private constructor(context: Context) {
     }
 
     /**
-     * Fetch lyrics with the new extended callback — full lifecycle support.
+     * Fetch lyrics with the new extended callback - full lifecycle support.
      */
     fun fetchLyrics(
         title: String,
@@ -139,7 +139,7 @@ class LyricsRepository private constructor(context: Context) {
     }
 
     /**
-     * Retry lyrics — clears negative cache and forces full refetch.
+     * Retry lyrics - clears negative cache and forces full refetch.
      */
     fun retryLyrics(
         title: String,

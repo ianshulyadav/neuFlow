@@ -24,4 +24,9 @@ object DatabaseModule {
     fun providePlaylistDao(database: MusicDatabase): PlaylistDao {
         return database.playlistDao()
     }
+
+    @Provides
+    fun provideColorSchemeDao(database: MusicDatabase): com.codetrio.spatialflow.data.cache.ColorSchemeDao {
+        return database.colorSchemeDao()
+    }
 }

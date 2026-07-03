@@ -120,6 +120,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 notInterestedIds = notInterested
             )
         }
+        loadHomeFeed()
     }
 
     private fun loadSearchHistory() {

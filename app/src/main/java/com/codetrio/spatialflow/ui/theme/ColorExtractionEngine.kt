@@ -114,11 +114,8 @@ private fun isNeutralArtwork(map: Map<Int,Int>): Boolean { if(map.isEmpty()) ret
 private fun isNearGray(argb: Int): Boolean { val r=(argb ushr 16)and 0xFF;val g=(argb ushr 8)and 0xFF;val b=argb and 0xFF; return maxOf(abs(r-g),abs(g-b),abs(r-b))<=MAX_DELTA}
 private fun blendArgb(a: Int, b: Int, ratio: Float): Int {
     val inv = 1f - ratio.coerceIn(0f, 1f)
-    val alpha = (((a ushr 24) and 0xFF) * inv + ((b ushr 24) and 0xFF) * ratio).toInt().coerceIn(0, 255)
-    val r = (((a ushr 16) and 0xFF) * inv + ((b ushr 16) and 0xFF) * ratio).toInt().coerceIn(0, 255)
-    val g = (((a ushr 8) and 0xFF) * inv + ((b ushr 8) and 0xFF) * ratio).toInt().coerceIn(0, 255)
-    val bVal = ((a and 0xFF) * inv + (b and 0xFF) * ratio).toInt().coerceIn(0, 255)
-    return (alpha shl 24) or (r shl 16) or (g shl 8) or bVal
+    fun c(s: Int) = ((((a ushr s) and 0xFF) * inv + ((b ushr s) and 0xFF) * ratio).roundToInt().coerceIn(0, 255))
+    return (c(24) shl 24) or (c(16) shl 16) or (c(8) shl 8) or c(0)
 }
 private fun lerp(a: Double, b: Double, f: Double): Double = a+(b-a)*f.coerceIn(0.0,1.0)
 private fun lerp(a: Float, b: Float, f: Float): Float = a+(b-a)*f.coerceIn(0f,1f)

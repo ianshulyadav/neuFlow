@@ -1,7 +1,5 @@
 package com.codetrio.spatialflow.ui.player
 
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -30,31 +28,35 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.codetrio.spatialflow.R
 import com.codetrio.spatialflow.model.SongItem
-import androidx.compose.foundation.background
+import com.codetrio.spatialflow.viewmodel.PlayerSharedViewModel
+import kotlin.math.abs
+import android.annotation.SuppressLint
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import android.annotation.SuppressLint
-import com.codetrio.spatialflow.viewmodel.PlayerSharedViewModel
-import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Menu
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun SlidingQueueDrawer(
     isQueueExpanded: Boolean,
@@ -90,64 +92,12 @@ fun SlidingQueueDrawer(
     )
     val safeCornerRadius = queueCornerRadius.coerceAtLeast(0.dp)
 
-    val queueBgColor = deriveArtworkSurfaceColor(
-        sourceColor = Color(playerBackgroundColor),
-        isDark = isDark,
-        darkLightness = 0.155f,
-        lightLightness = 0.835f,
-        darkSaturationRange = 0.32f..0.54f,
-        lightSaturationRange = 0.30f..0.48f
-    )
-    val queueTrayBackgroundColor = remember(playerBackgroundColor, isDark) {
-        deriveArtworkSurfaceColor(
-            sourceColor = Color(playerBackgroundColor),
-            isDark = isDark,
-            darkLightness = 0.24f,
-            lightLightness = 0.73f,
-            darkSaturationRange = 0.30f..0.60f,
-            lightSaturationRange = 0.24f..0.50f
-        )
-    }
-    val queueTrayInactiveButtonColor = remember(queueTrayBackgroundColor, isDark) {
-        val hsl = FloatArray(3)
-        androidx.core.graphics.ColorUtils.colorToHSL(queueTrayBackgroundColor.toArgb(), hsl)
-        if (hsl[1] < 0.08f) {
-            hsl[1] = 0f
-        } else {
-            hsl[1] = hsl[1].coerceIn(0.24f, 0.55f)
-        }
-        if (isDark) {
-            hsl[2] = 0.33f
-        } else {
-            hsl[2] = 0.64f
-        }
-        Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl))
-    }
-    val queueTrayActiveButtonColor = remember(dynamicAccentColor, isDark) {
-        val hsl = FloatArray(3)
-        androidx.core.graphics.ColorUtils.colorToHSL(dynamicAccentColor.toArgb(), hsl)
-        if (hsl[1] < 0.08f) {
-            if (isDark) Color(0xFFE8E8EA) else Color(0xFF1F1E23)
-        } else {
-            hsl[1] = hsl[1].coerceAtLeast(0.45f)
-            hsl[2] = if (isDark) 0.62f else 0.42f
-            Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl))
-        }
-    }
-    val queueTrayInactiveContentColor = remember(queueTrayInactiveButtonColor) {
-        if (androidx.core.graphics.ColorUtils.calculateLuminance(queueTrayInactiveButtonColor.toArgb()) > 0.5) {
-            Color(0xFF1C1B1F)
-        } else {
-            Color.White
-        }
-    }
-    val queueTrayActiveContentColor = remember(queueTrayActiveButtonColor) {
-        if (androidx.core.graphics.ColorUtils.calculateLuminance(queueTrayActiveButtonColor.toArgb()) > 0.5) {
-            Color(0xFF1C1B1F)
-        } else {
-            Color.White
-        }
-    }
+    val queueBgColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val queueTrayBackgroundColor = MaterialTheme.colorScheme.surfaceContainer
+    val queueTrayInactiveButtonColor = MaterialTheme.colorScheme.surfaceVariant
+    val queueTrayActiveButtonColor = MaterialTheme.colorScheme.primary
+    val queueTrayInactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val queueTrayActiveContentColor = MaterialTheme.colorScheme.onPrimary
 
     val haptic = LocalHapticFeedback.current
 
@@ -249,13 +199,7 @@ fun SlidingQueueDrawer(
                         contentType = { _, _ -> "queue-song" }
                     ) { index, song ->
                         val isPlaying = (index == currentSongIndex)
-                        val cornerRadius = 12.dp
-                        val shape = when {
-                            songList.size <= 1 -> RoundedCornerShape(cornerRadius)
-                            index == 0 -> RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
-                            index == songList.size - 1 -> RoundedCornerShape(bottomStart = cornerRadius, bottomEnd = cornerRadius)
-                            else -> androidx.compose.ui.graphics.RectangleShape
-                        }
+                        val shapes = ListItemDefaults.segmentedShapes(index = index, count = songList.size)
                         val isDragging = index == dragDropState.currentIndexOfDraggedItem
                         val displacement = if (isDragging) dragDropState.elementDisplacement ?: 0f else 0f
 
@@ -274,7 +218,7 @@ fun SlidingQueueDrawer(
                             QueueListItem(
                                 song = song,
                                 isPlaying = isPlaying,
-                                shape = shape,
+                                shapes = shapes,
                                 showReorderControls = true,
                                 dragDropState = if (isQueueExpanded) dragDropState else null,
                                 index = index,
@@ -457,11 +401,12 @@ fun SlidingQueueDrawer(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun QueueListItem(
     song: SongItem,
     isPlaying: Boolean,
-    shape: androidx.compose.ui.graphics.Shape,
+    shapes: ListItemShapes,
     showReorderControls: Boolean,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -473,12 +418,10 @@ fun QueueListItem(
     var showMenu by remember { mutableStateOf(false) }
 
     ListItem(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .clickable(onClick = onClick),
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
         leadingContent = {
-            val albumArtModel = remember(song.videoId) { song.getAlbumArtUri() ?: R.drawable.default_album_art }
+            val albumArtModel = remember(song.id) { song.getAlbumArtUri() ?: R.drawable.default_album_art }
             Box(
                 modifier = Modifier.size(52.dp),
                 contentAlignment = Alignment.Center
@@ -500,7 +443,7 @@ fun QueueListItem(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.PlayArrow,
+                            imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Playing",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
@@ -509,7 +452,7 @@ fun QueueListItem(
                 }
             }
         },
-        headlineContent = {
+        content = {
             Text(
                 text = song.title,
                 fontWeight = if (isPlaying) FontWeight.ExtraBold else FontWeight.SemiBold,
@@ -589,6 +532,7 @@ fun QueueListItem(
                 }
             }
         },
+        shapes = shapes,
         colors = ListItemDefaults.colors(
             containerColor = if (isPlaying) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
@@ -604,7 +548,7 @@ class DragDropState(
     private val scope: CoroutineScope,
     private val onMove: (Int, Int) -> Unit
 ) {
-    var draggedDistance by mutableFloatStateOf(0f)
+    var draggedDistance by mutableStateOf(0f)
     var initiallyDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
     var currentIndexOfDraggedItem by mutableStateOf<Int?>(null)
     private var autoScrollJob: Job? = null
@@ -699,7 +643,7 @@ class DragDropState(
                 val delta = autoScrollDeltaPx
                 if (delta == 0f) break
                 lazyListState.scrollBy(delta)
-                delay(16)
+                delay(16L.milliseconds)
             }
         }
     }
@@ -739,3 +683,4 @@ fun Modifier.dragContainer(dragDropState: DragDropState, enabled: Boolean): Modi
         }
     )
 }
+

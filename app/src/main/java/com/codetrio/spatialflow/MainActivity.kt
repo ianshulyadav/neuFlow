@@ -82,7 +82,6 @@ import com.codetrio.spatialflow.ui.explore.ExploreScreen
 import com.codetrio.spatialflow.ui.explore.GoogleSignInScreen
 import com.codetrio.spatialflow.ui.library.LibraryScreen
 import com.codetrio.spatialflow.ui.theme.SpatialFlowTheme
-import com.codetrio.spatialflow.ui.theme.generateColorSchemePair
 import com.codetrio.spatialflow.ui.theme.observeKey
 import com.codetrio.spatialflow.ui.onboarding.OnboardingScreen
 import android.content.Context
@@ -172,12 +171,9 @@ class MainActivity : AppCompatActivity() {
                 else -> systemDark
             }
 
-            val currentSong by playerViewModel.currentSong.collectAsStateWithLifecycle()
-            val playerBackgroundColor by playerViewModel.playerBackgroundColor.collectAsStateWithLifecycle()
-            val dynamicAlbumColor = if (currentSong != null) playerBackgroundColor else null
-            val albumColorSchemePair = dynamicAlbumColor?.let { generateColorSchemePair(androidx.compose.ui.graphics.Color(it)) }
+            val colorSchemePair by playerViewModel.currentColorScheme.collectAsStateWithLifecycle()
 
-            SpatialFlowTheme(darkTheme = isDarkTheme, albumColorSchemePair = albumColorSchemePair) {
+            SpatialFlowTheme(darkTheme = isDarkTheme, albumColorSchemePair = colorSchemePair) {
                 val hideNavLabels by prefs.observeKey("hide_nav_labels", false)
                 val dynamicNavStyle by prefs.observeKey("dynamic_nav_style", false)
                 val hasSeenOnboarding by prefs.observeKey("has_seen_onboarding_1_8", false)
@@ -428,8 +424,10 @@ class MainActivity : AppCompatActivity() {
                                     )
                                 }
                                 composable("library") {
+                                    val accountViewModel: com.codetrio.spatialflow.viewmodel.AccountViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
                                     LibraryScreen(
                                         viewModel = playerViewModel,
+                                        accountViewModel = accountViewModel,
                                         onEditSong = { song ->
                                             editingSong = song
                                             currentNavController.navigate("tag_editor")
@@ -442,6 +440,24 @@ class MainActivity : AppCompatActivity() {
                                                 launchSingleTop = true
                                                 restoreState = true
                                             }
+                                        },
+                                        onAlbumClick = { id ->
+                                            exploreViewModel.cameFromLibrary = true
+                                            exploreViewModel.loadAlbum(id)
+                                            currentNavController.navigate("explore")
+                                        },
+                                        onPlaylistClick = { id ->
+                                            exploreViewModel.cameFromLibrary = true
+                                            exploreViewModel.loadPlaylist(id)
+                                            currentNavController.navigate("explore")
+                                        },
+                                        onArtistClick = { id ->
+                                            exploreViewModel.cameFromLibrary = true
+                                            exploreViewModel.loadArtist(id)
+                                            currentNavController.navigate("explore")
+                                        },
+                                        onConnectClick = {
+                                            currentNavController.navigate("google_signin")
                                         }
                                     )
                                 }

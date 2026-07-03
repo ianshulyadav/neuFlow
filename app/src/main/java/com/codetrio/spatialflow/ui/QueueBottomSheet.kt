@@ -15,31 +15,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.activityViewModels
+import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codetrio.spatialflow.model.SongItem
 import com.codetrio.spatialflow.ui.player.QueueSongCard
 import com.codetrio.spatialflow.ui.theme.GoogleSansRounded
-import com.codetrio.spatialflow.viewmodel.PlayerSharedViewModel
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 
-class QueueBottomSheet : BottomSheetDialogFragment() {
-    private val vm: PlayerSharedViewModel by activityViewModels()
+import androidx.lifecycle.ViewModelProvider
+import com.codetrio.spatialflow.viewmodel.PlayerSharedViewModel
 
+class QueueBottomSheet : BottomSheetDialogFragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return ComposeView(requireContext()).apply {
             setContent {
+                val vm = ViewModelProvider(requireActivity())[PlayerSharedViewModel::class.java]
                 val songList by vm.songList.collectAsStateWithLifecycle()
                 val currentSongIndex by vm.currentSongIndex.collectAsStateWithLifecycle()
-                QueueBottomSheetContent(
-                    songList = songList,
-                    currentSongIndex = currentSongIndex,
-                    onDismiss = { dismiss() },
-                    onPlaySongAtIndex = { vm.playSongAtIndex(it) }
-                )
+                QueueBottomSheetContent(songList = songList, currentSongIndex = currentSongIndex,
+                    onDismiss = { dismiss() }, onPlaySongAtIndex = { vm.playSongAtIndex(it) })
             }
         }
     }
@@ -60,25 +56,12 @@ fun QueueBottomSheetContent(songList: List<SongItem>, currentSongIndex: Int, onD
         Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
             Box(Modifier.width(36.dp).height(5.dp).clip(RoundedCornerShape(50)).background(scheme.onSurfaceVariant.copy(alpha = 0.4f)))
         }
-        Text(
-            text = "Queue",
-            style = MaterialTheme.typography.titleLarge,
-            fontFamily = GoogleSansRounded,
-            fontWeight = FontWeight.Bold,
-            color = scheme.onSurface,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-        )
+        Text(text = "Queue", style = MaterialTheme.typography.titleLarge, fontFamily = GoogleSansRounded,
+            fontWeight = FontWeight.Bold, color = scheme.onSurface, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         LazyColumn(Modifier.fillMaxSize().weight(1f), contentPadding = PaddingValues(bottom = 16.dp)) {
             itemsIndexed(songList, key = { i, s -> "${s.videoId}_$i" }) { index, song ->
-                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)) {
-                    QueueSongCard(
-                        song = song,
-                        isCurrent = index == currentSongIndex,
-                        isPlaying = index == currentSongIndex,
-                        onTap = { onPlaySongAtIndex(index) },
-                        onRemove = { }
-                    )
-                }
+                QueueSongCard(song = song, isCurrent = index == currentSongIndex, isPlaying = index == currentSongIndex,
+                    onTap = { onPlaySongAtIndex(index) }, onRemove = { })
             }
         }
     }

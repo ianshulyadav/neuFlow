@@ -74,7 +74,7 @@ import com.codetrio.spatialflow.data.lyrics.LyricLine
 import com.codetrio.spatialflow.data.lyrics.LyricWord
 import com.codetrio.spatialflow.data.lyrics.LyricsResult
 import com.codetrio.spatialflow.model.SongItem
-import com.codetrio.spatialflow.ui.theme.GoogleSansFlexNonRounded
+import com.codetrio.spatialflow.ui.theme.GoogleSansFlex
 
 // ════════════════════════════════════════════════════════════════════════════════
 // ─ Data Classes & Constants
@@ -383,7 +383,7 @@ private fun LyricLineItem(
         }
 
     val mainTextStyle = MaterialTheme.typography.headlineMedium.copy(
-        fontFamily = GoogleSansFlexNonRounded,
+        fontFamily = GoogleSansFlex,
         fontSize = 38.sp,
         fontWeight = FontWeight.Bold,
         lineHeight = 50.sp,
@@ -391,7 +391,7 @@ private fun LyricLineItem(
     )
 
     val bracketTextStyle = MaterialTheme.typography.bodyLarge.copy(
-        fontFamily = GoogleSansFlexNonRounded,
+        fontFamily = GoogleSansFlex,
         fontSize = 20.sp,
         fontWeight = FontWeight.Medium,
         lineHeight = 28.sp,

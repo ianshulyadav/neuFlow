@@ -221,3 +221,15 @@ fun com.codetrio.spatialflow.data.db.PlaylistSongEntity.toSongItem(): SongItem {
         }
     }
 }
+
+fun com.codetrio.spatialflow.data.innertube.OnlineSong.toSongItem(): SongItem {
+    return SongItem.createOnlineSong(
+        videoId = this.videoId,
+        title = this.title,
+        artist = this.artist,
+        streamUrl = null,
+        durationMs = this.durationMs,
+        thumbnailUrl = this.thumbnailUrl,
+        artistId = this.artistId
+    )
+}

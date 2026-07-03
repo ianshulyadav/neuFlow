@@ -48,11 +48,11 @@ fun AnimatedPlaybackControls(
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             fun w(b: Btn) = when (last) { b -> 1.1f; null -> 1f; else -> 0.65f }
             val pw by animateFloatAsState(w(Btn.PREV), pressAnimationSpec, label = "pw")
-            Box(Modifier.weight(pw).fillMaxHeight().clip(CircleShape).background(colorPrev).clickable { last = Btn.PREV; trigger++; scope.launch { delay(180); onPrevious() } }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.SkipPrevious, "Prev", modifier = Modifier.size(iconSize), tint = tintPrev) }
+            Box(Modifier.weight(pw).fillMaxHeight().clip(CircleShape).background(colorPrev).clickable { last = Btn.PREV; trigger++; scope.launch { delay(180); onPrevious() } }, contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Rounded.SkipPrevious, contentDescription = "Prev", tint = tintPrev, modifier = Modifier.size(iconSize)) }
             val ppw by animateFloatAsState(w(Btn.PP), pressAnimationSpec, label = "ppw"); val ppc by animateDpAsState(if (!visual) ppCornerPlaying else ppCornerPaused, spatialSpec, label = "ppc")
-            Box(Modifier.weight(ppw).fillMaxHeight().graphicsLayer { clip = true; shape = AbsoluteSmoothCornerShape(ppc, 60) }.background(colorPP).clickable { last = Btn.PP; trigger++; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlayPause() }, contentAlignment = Alignment.Center) { Icon(if (visual) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (visual) "Pause" else "Play", modifier = Modifier.size(ppIconSize), tint = tintPP) }
+            Box(Modifier.weight(ppw).fillMaxHeight().graphicsLayer { clip = true; shape = AbsoluteSmoothCornerShape(ppc, 60, ppc, 60, ppc, 60, ppc, 60) }.background(colorPP).clickable { last = Btn.PP; trigger++; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlayPause() }, contentAlignment = Alignment.Center) { Icon(imageVector = if (visual) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = if (visual) "Pause" else "Play", tint = tintPP, modifier = Modifier.size(ppIconSize)) }
             val nw by animateFloatAsState(w(Btn.NEXT), pressAnimationSpec, label = "nw")
-            Box(Modifier.weight(nw).fillMaxHeight().clip(CircleShape).background(colorNext).clickable { last = Btn.NEXT; trigger++; scope.launch { delay(180); onNext() } }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(iconSize), tint = tintNext) }
+            Box(Modifier.weight(nw).fillMaxHeight().clip(CircleShape).background(colorNext).clickable { last = Btn.NEXT; trigger++; scope.launch { delay(180); onNext() } }, contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Rounded.SkipNext, contentDescription = "Next", tint = tintNext, modifier = Modifier.size(iconSize)) }
         }
     }
 }

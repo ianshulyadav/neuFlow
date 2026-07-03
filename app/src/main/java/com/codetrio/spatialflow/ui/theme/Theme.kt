@@ -15,42 +15,8 @@ import android.app.Activity
 import android.content.ContextWrapper
 import android.os.Build
 
-import android.content.SharedPreferences
-
 val LocalAlbumColorScheme = staticCompositionLocalOf<ColorSchemePair?> { null }
 val LocalSpatialFlowDarkTheme = staticCompositionLocalOf { false }
-
-@Composable
-fun <T> SharedPreferences.observeKey(key: String, defaultValue: T): State<T> {
-    val state = remember { mutableStateOf(defaultValue) }
-    DisposableEffect(this, key) {
-        state.value = when (defaultValue) {
-            is Boolean -> getBoolean(key, defaultValue) as T
-            is String -> getString(key, defaultValue) as T
-            is Float -> getFloat(key, defaultValue) as T
-            is Int -> getInt(key, defaultValue) as T
-            is Long -> getLong(key, defaultValue) as T
-            else -> defaultValue
-        }
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, changedKey ->
-            if (changedKey == key) {
-                state.value = when (defaultValue) {
-                    is Boolean -> prefs.getBoolean(key, defaultValue) as T
-                    is String -> prefs.getString(key, defaultValue) as T
-                    is Float -> prefs.getFloat(key, defaultValue) as T
-                    is Int -> prefs.getInt(key, defaultValue) as T
-                    is Long -> prefs.getLong(key, defaultValue) as T
-                    else -> defaultValue
-                }
-            }
-        }
-        registerOnSharedPreferenceChangeListener(listener)
-        onDispose {
-            unregisterOnSharedPreferenceChangeListener(listener)
-        }
-    }
-    return state
-}
 
 private tailrec fun android.content.Context.findActivity(): Activity? = when(this){ is Activity -> this; is ContextWrapper -> baseContext.findActivity(); else -> null }
 

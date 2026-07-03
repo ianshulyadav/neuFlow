@@ -37,8 +37,10 @@ import com.codetrio.spatialflow.util.PlaybackStateManager
 import com.codetrio.spatialflow.util.PlayerHapticManager
 import com.codetrio.spatialflow.util.SongDownloader
 import com.codetrio.spatialflow.viewmodel.lyrics.PlayerLyricsStateController
+import com.codetrio.spatialflow.ui.theme.*
 import com.google.gson.JsonElement
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -67,10 +69,15 @@ import kotlin.time.Duration.Companion.milliseconds
 @HiltViewModel
 class PlayerSharedViewModel @Inject constructor(
     private val application: Application,
-    private val playlistDao: PlaylistDao
+    private val playlistDao: PlaylistDao,
+    private val colorSchemeDao: com.codetrio.spatialflow.data.cache.ColorSchemeDao
 ) : AndroidViewModel(application) {
     
     val bgScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+
+    private val _currentColorScheme = MutableStateFlow<ColorSchemePair?>(null)
+    val currentColorScheme: StateFlow<ColorSchemePair?> = _currentColorScheme.asStateFlow()
+    private var currentPaletteStyle = PaletteStyle.default
 
     fun cleanupBgScope() {
         bgScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
@@ -912,10 +919,12 @@ class PlayerSharedViewModel @Inject constructor(
                     // Trigger exact real engagement likes count and watch history fetching
                     fetchEngagementAndHistoryForSong(song)
                     trackHistoryForSong(song)
+                    updateColorsForSong(song)
                 } else {
                     _currentSongArtwork.value = null
                     _miniPlayerBlendColor.value = 0
                     _playerBackgroundColor.value = 0xFF0F0F0F.toInt()
+                    _currentColorScheme.value = null
                 }
             }
         }
@@ -1758,6 +1767,46 @@ class PlayerSharedViewModel @Inject constructor(
         setShuffleEnabled(!_isShuffleEnabled.value)
     }
 
+    fun updateColorsForSong(song: SongItem) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val uri = song.getAlbumArtUri() ?: run {
+                _currentColorScheme.value = null
+                return@launch
+            }
+
+            val cacheKey = "${uri}_${currentPaletteStyle.key}"
+
+            // Check memory cache
+            ColorSchemeCache.get(cacheKey)?.let {
+                _currentColorScheme.value = it
+                return@launch
+            }
+
+            // Check Room cache
+            val roomCached = colorSchemeDao.get(uri.toString(), currentPaletteStyle.key)
+            if (roomCached != null) {
+                val pair = ColorSchemeCache.deserializeColorSchemePair(roomCached)
+                ColorSchemeCache.put(cacheKey, pair)
+                _currentColorScheme.value = pair
+                return@launch
+            }
+
+            // Generate fresh
+            val bitmap = ColorSchemeCache.loadBitmapForExtraction(appContext, uri) ?: run {
+                _currentColorScheme.value = null
+                return@launch
+            }
+            val seed = extractSeedColor(bitmap)
+            val pair = generateColorSchemePair(seed, currentPaletteStyle)
+
+            // Cache both tiers
+            ColorSchemeCache.put(cacheKey, pair)
+            colorSchemeDao.insert(ColorSchemeCache.serializeColorSchemePair(uri.toString(), currentPaletteStyle.key, pair))
+
+            _currentColorScheme.value = pair
+            bitmap.recycle()
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()
