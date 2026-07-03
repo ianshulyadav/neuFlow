@@ -1,0 +1,12 @@
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/explore/ExploreScreen.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/explore/ExploreScreen.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/explore/ExploreScreen.kt	2026-07-03 07:10:32.276912426 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/explore/ExploreScreen.kt	2026-07-03 07:13:58.400912426 +0000
+@@ -1,8 +1,6 @@
+ package com.codetrio.spatialflow.ui.explore
+ 
+-import android.R.attr.translationY
+ import android.content.res.Configuration
+-import android.graphics.Color.alpha
+ import androidx.compose.animation.AnimatedContent
+ import androidx.compose.animation.AnimatedVisibilityScope
+ import androidx.compose.animation.ExperimentalSharedTransitionApi

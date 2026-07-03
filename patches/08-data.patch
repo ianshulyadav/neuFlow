@@ -1,0 +1,34 @@
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/data/cache/ColorSchemeDao.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/data/cache/ColorSchemeDao.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/data/cache/ColorSchemeDao.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/data/cache/ColorSchemeDao.kt	2026-07-03 06:09:55.488266797 +0000
+@@ -0,0 +1,30 @@
++package com.codetrio.spatialflow.data.cache
++
++import androidx.room.*
++
++@Entity(tableName = "color_schemes")
++data class CachedColorScheme(
++    @PrimaryKey val uri: String,
++    val paletteStyle: String,
++    val lightSchemeJson: String,
++    val darkSchemeJson: String,
++    val cachedAt: Long = System.currentTimeMillis()
++)
++
++@Dao
++interface ColorSchemeDao {
++    @Query("SELECT * FROM color_schemes WHERE uri = :uri AND paletteStyle = :style LIMIT 1")
++    suspend fun get(uri: String, style: String): CachedColorScheme?
++
++    @Insert(onConflict = OnConflictStrategy.REPLACE)
++    suspend fun insert(scheme: CachedColorScheme)
++
++    @Query("DELETE FROM color_schemes WHERE uri = :uri")
++    suspend fun deleteByUri(uri: String)
++
++    @Query("DELETE FROM color_schemes WHERE cachedAt < :threshold")
++    suspend fun deleteOlderThan(threshold: Long)
++
++    @Query("SELECT COUNT(*) FROM color_schemes")
++    suspend fun count(): Int
++}

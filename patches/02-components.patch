@@ -1,0 +1,210 @@
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/ActionSheet.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/ActionSheet.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/ActionSheet.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/ActionSheet.kt	2026-07-03 06:09:55.492266797 +0000
+@@ -0,0 +1,38 @@
++package com.codetrio.spatialflow.ui.components
++
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.rounded.ChevronRight
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import com.codetrio.spatialflow.ui.theme.GoogleSansRounded
++
++data class ActionSheetItem(val label: String, val subtitle: String? = null, val icon: ImageVector? = null, val destructive: Boolean = false, val chevron: Boolean = false, val onClick: () -> Unit)
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun ActionSheet(title: String, onDismiss: () -> Unit, items: List<ActionSheetItem>, modifier: Modifier = Modifier) {
++    val scheme = MaterialTheme.colorScheme
++    Surface(modifier.fillMaxWidth(), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), scheme.surfaceContainerHigh, tonalElevation = 0.dp) {
++        Column(Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
++            Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { Box(Modifier.width(36.dp).height(5.dp).clip(RoundedCornerShape(50)).background(scheme.onSurfaceVariant.copy(alpha = 0.4f))) }
++            Text(title, MaterialTheme.typography.titleLarge, fontFamily = GoogleSansRounded, fontWeight = FontWeight.Bold, color = scheme.onSurface, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
++            items.forEach { item ->
++                Row(Modifier.fillMaxWidth().clickable { item.onClick(); onDismiss() }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
++                    if (item.icon != null) Box(Modifier.size(40.dp).clip(CircleShape).background(if (item.destructive) scheme.errorContainer else scheme.secondaryContainer), contentAlignment = Alignment.Center) { Icon(item.icon, item.label, if (item.destructive) scheme.error else scheme.onSecondaryContainer, Modifier.size(20.dp)) }
++                    Column(Modifier.weight(1f)) { Text(item.label, MaterialTheme.typography.bodyLarge, if (item.destructive) scheme.error else scheme.onSurface); item.subtitle?.let { Text(it, MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant) } }
++                    if (item.chevron) Icon(Icons.Rounded.ChevronRight, null, scheme.onSurfaceVariant, Modifier.size(20.dp))
++                }
++            }
++        }
++    }
++}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/AutoScrollingText.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/AutoScrollingText.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/AutoScrollingText.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/AutoScrollingText.kt	2026-07-03 06:09:55.492266797 +0000
+@@ -0,0 +1,30 @@
++package com.codetrio.spatialflow.ui.components
++
++import androidx.compose.foundation.ExperimentalFoundationApi
++import androidx.compose.foundation.basicMarquee
++import androidx.compose.foundation.layout.padding
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.drawWithCache
++import androidx.compose.ui.graphics.BlendMode
++import androidx.compose.ui.graphics.Brush
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.CompositingStrategy
++import androidx.compose.ui.graphics.graphicsLayer
++import androidx.compose.ui.text.TextStyle
++import androidx.compose.ui.unit.Dp
++import androidx.compose.ui.unit.dp
++
++@OptIn(ExperimentalFoundationApi::class)
++@Composable
++fun AutoScrollingText(text: String, style: TextStyle = MaterialTheme.typography.bodyMedium, gradientEdgeColor: Color = MaterialTheme.colorScheme.primaryContainer, edgeWidth: Dp = 16.dp, canScroll: Boolean = true, modifier: Modifier = Modifier) {
++    val m = if (canScroll) modifier.graphicsLayer{compositingStrategy=CompositingStrategy.Offscreen}.drawWithCache{
++        val ep=edgeWidth.toPx()
++        val lb=Brush.horizontalGradient(listOf(gradientEdgeColor,gradientEdgeColor.copy(alpha=0f)),0f,ep)
++        val rb=Brush.horizontalGradient(listOf(gradientEdgeColor.copy(alpha=0f),gradientEdgeColor),size.width-ep,size.width)
++        onDrawWithContent{drawContent();drawRect(lb,blendMode=BlendMode.DstIn);drawRect(rb,blendMode=BlendMode.DstIn)}
++    }.basicMarquee().padding(horizontal=edgeWidth) else modifier.padding(horizontal=edgeWidth)
++    Text(text=text,style=style,maxLines=1,softWrap=false,modifier=m)
++}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/GradientHeader.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/GradientHeader.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/GradientHeader.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/GradientHeader.kt	2026-07-03 06:09:55.496266797 +0000
+@@ -0,0 +1,27 @@
++package com.codetrio.spatialflow.ui.components
++
++import androidx.compose.foundation.background
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.automirrored.rounded.ArrowBack
++import androidx.compose.material3.*
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.remember
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.graphics.Brush
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import com.codetrio.spatialflow.ui.theme.GoogleSansRounded
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun GradientHeader(title: String, startColor: Color = MaterialTheme.colorScheme.primaryContainer, endColor: Color = MaterialTheme.colorScheme.surface, onBackClick: () -> Unit, expandedHeight: androidx.compose.ui.unit.Dp = 160.dp, scrollBehavior: TopAppBarScrollBehavior? = null, modifier: Modifier = Modifier) {
++    val scheme = MaterialTheme.colorScheme
++    val grad = remember(startColor, endColor) { Brush.verticalGradient(listOf(startColor, endColor)) }
++    LargeTopAppBar(
++        title = { Text(title, color = scheme.onPrimaryContainer, fontFamily = GoogleSansRounded, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp)) },
++        expandedHeight = expandedHeight, modifier = modifier.background(brush = grad), scrollBehavior = scrollBehavior,
++        navigationIcon = { IconButton(onClick = onBackClick, colors = IconButtonDefaults.iconButtonColors(containerColor = scheme.onPrimaryContainer.copy(alpha = 0.15f))) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = scheme.onPrimaryContainer) } },
++        colors = TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent, titleContentColor = scheme.onPrimaryContainer, navigationIconContentColor = scheme.onPrimaryContainer)
++    )
++}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionDivider.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionDivider.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionDivider.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionDivider.kt	2026-07-03 06:09:55.496266797 +0000
+@@ -0,0 +1,15 @@
++package com.codetrio.spatialflow.ui.components
++
++import androidx.compose.foundation.layout.padding
++import androidx.compose.material3.HorizontalDivider
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.unit.dp
++
++@Composable fun SectionDivider(modifier: Modifier = Modifier) {
++    HorizontalDivider(modifier, thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
++}
++@Composable fun PaddedSectionDivider(modifier: Modifier = Modifier) {
++    SectionDivider(modifier.padding(horizontal = 16.dp))
++}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionHeader.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionHeader.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionHeader.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SectionHeader.kt	2026-07-03 06:09:55.496266797 +0000
+@@ -0,0 +1,15 @@
++package com.codetrio.spatialflow.ui.components
++
++import androidx.compose.foundation.layout.padding
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import com.codetrio.spatialflow.ui.theme.GoogleSansRounded
++
++@Composable
++fun SectionHeader(title: String, modifier: Modifier = Modifier) {
++    Text(title, MaterialTheme.typography.titleLarge, fontFamily = GoogleSansRounded, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, modifier = modifier.padding(horizontal = 24.dp, vertical = 12.dp))
++}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SongListItem.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SongListItem.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SongListItem.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SongListItem.kt	2026-07-03 06:09:55.496266797 +0000
+@@ -0,0 +1,38 @@
++package com.codetrio.spatialflow.ui.components
++
++import androidx.compose.animation.animateColorAsState
++import androidx.compose.animation.core.*
++import androidx.compose.foundation.background
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.rounded.MoreVert
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.layout.ContentScale
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import coil.compose.AsyncImage
++import com.codetrio.spatialflow.model.SongItem
++
++@Composable
++fun SongListItem(song: SongItem, isCurrentSong: Boolean, isPlaying: Boolean, showAlbumArt: Boolean = true, onClick: () -> Unit, onMoreOptions: (() -> Unit)? = null, modifier: Modifier = Modifier) {
++    val scheme = MaterialTheme.colorScheme; val transition = updateTransition(isCurrentSong, label = "hl")
++    val surfaceColor by transition.animateColor(tween(400), label = "sc") { if (it) scheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent }
++    val textColor by transition.animateColor(tween(400), label = "tc") { if (it) scheme.primary else scheme.onSurface }
++    Surface(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick), RoundedCornerShape(16.dp), surfaceColor, tonalElevation = 0.dp) {
++        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
++            if (showAlbumArt) { Box(Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(scheme.surfaceVariant), contentAlignment = Alignment.Center) { AsyncImage(song.getAlbumArtUri(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } }
++            Column(Modifier.weight(1f)) { Text(song.title, MaterialTheme.typography.titleMedium, textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal); Text(song.artist, MaterialTheme.typography.bodyMedium, scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
++            if (isCurrentSong && isPlaying) Box(Modifier.size(4.dp).clip(CircleShape).background(scheme.primary))
++            if (onMoreOptions != null) IconButton(onClick = onMoreOptions) { Icon(Icons.Rounded.MoreVert, null, scheme.onSurfaceVariant) }
++        }
++    }
++}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SpatialFlowCard.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SpatialFlowCard.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/components/SpatialFlowCard.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/components/SpatialFlowCard.kt	2026-07-03 06:09:55.496266797 +0000
+@@ -0,0 +1,19 @@
++package com.codetrio.spatialflow.ui.components
++
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.padding
++import androidx.compose.material3.Card
++import androidx.compose.material3.CardDefaults
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.remember
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.unit.dp
++import com.codetrio.spatialflow.ui.theme.CardCorners
++import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
++
++@Composable
++fun SpatialFlowCard(onClick: (() -> Unit)? = null, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
++    val s = remember { AbsoluteSmoothCornerShape(CardCorners.RadiusDp.dp,CardCorners.RadiusDp.dp,CardCorners.RadiusDp.dp,CardCorners.RadiusDp.dp,CardCorners.Smoothness,CardCorners.Smoothness,CardCorners.Smoothness,CardCorners.Smoothness) }
++    Card(modifier.fillMaxWidth().padding(horizontal=16.dp), s, CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerHigh), CardDefaults.cardElevation(0.dp), onClick ?: {}) { content() }
++}

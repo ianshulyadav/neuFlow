@@ -1,0 +1,688 @@
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorExtractionEngine.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorExtractionEngine.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorExtractionEngine.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorExtractionEngine.kt	2026-07-03 07:11:51.612912426 +0000
+@@ -0,0 +1,134 @@
++package com.codetrio.spatialflow.ui.theme
++
++import android.graphics.Bitmap
++import android.util.LruCache
++import androidx.compose.material3.ColorScheme
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.toArgb
++import com.google.android.material.color.utilities.*
++import kotlin.math.*
++
++data class ScoringConfig(
++    val targetChroma: Double = 48.0, val weightProportion: Double = 0.7,
++    val weightChromaAbove: Double = 0.3, val weightChromaBelow: Double = 0.1,
++    val cutoffChroma: Double = 5.0, val cutoffExcitedProportion: Double = 0.01,
++    val maxColorCount: Int = 4, val maxHueDifference: Int = 90, val minHueDifference: Int = 15)
++
++data class ExtractConfig(
++    val downscaleMaxDimension: Int = 128, val quantizerMaxColors: Int = 128,
++    val scoring: ScoringConfig = ScoringConfig(), val accuracyLevel: Int = 0
++) { val normalizedAccuracy: Double get() = accuracyLevel.coerceIn(0,10).toDouble() / 10.0 }
++
++enum class PaletteStyle(val key: String) {
++    TONAL_SPOT("tonal_spot"), VIBRANT("vibrant"), EXPRESSIVE("expressive"), FRUIT_SALAD("fruit_salad");
++    companion object { val default = TONAL_SPOT }
++}
++
++data class ColorSchemePair(val light: ColorScheme, val dark: ColorScheme)
++
++private val seedCache = LruCache<Int, Color>(32)
++private val schemeCache = LruCache<String, ColorSchemePair>(48)
++fun clearAllCaches() { seedCache.evictAll(); schemeCache.evictAll() }
++
++private const val GRAY_CHROMA = 12.0; private const val NEUTRAL_CHROMA = 8.0
++private const val HIGH_CHROMA = 18.0; private const val REQ_NEUTRAL = 0.92
++private const val MAX_HIGH = 0.03; private const val MAX_WEIGHTED = 9.0; private const val MAX_DELTA = 10
++
++fun extractSeedColor(bitmap: Bitmap, config: ExtractConfig = ExtractConfig()): Color {
++    val key = 31 * bitmap.hashCode() + config.hashCode()
++    seedCache.get(key)?.let { return it }
++    val result = runCatching {
++        val pixels = IntArray(bitmap.width * bitmap.height)
++        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
++        Color(selectSeedArgb(pixels, config))
++    }.getOrElse { Color(0xFF6750A4) }
++    seedCache.put(key, result); return result
++}
++
++fun generateColorSchemePair(seed: Color, style: PaletteStyle = PaletteStyle.default): ColorSchemePair {
++    val key = "${seed.toArgb()}_${style.key}"
++    schemeCache.get(key)?.let { return it }
++    val result = runCatching {
++        val hct = Hct.fromInt(seed.toArgb())
++        val gray = hct.chroma <= GRAY_CHROMA && isNearGray(seed.toArgb())
++        fun make(dark: Boolean): ColorScheme {
++            val s = when(style) {
++                PaletteStyle.TONAL_SPOT -> SchemeTonalSpot(hct,dark,0.0)
++                PaletteStyle.VIBRANT -> SchemeVibrant(hct,dark,0.0)
++                PaletteStyle.EXPRESSIVE -> SchemeExpressive(hct,dark,0.0)
++                PaletteStyle.FRUIT_SALAD -> SchemeFruitSalad(hct,dark,0.0)}
++            return if(gray && dark) grayscaleScheme(s) else s.toComposeScheme()}
++        ColorSchemePair(make(false), make(true))
++    }.getOrElse { ColorSchemePair(androidx.compose.material3.lightColorScheme(), androidx.compose.material3.darkColorScheme()) }
++    schemeCache.put(key, result); return result
++}
++
++private data class ScoredHct(val hct: Hct, val score: Double)
++private data class RepColor(val argb: Int, val hct: Hct)
++
++private fun selectSeedArgb(pixels: IntArray, config: ExtractConfig): Int {
++    val fallback = averageArgb(pixels)
++    val q = QuantizerCelebi.quantize(pixels, config.quantizerMaxColors)
++    if(isNeutralArtwork(q) && isNearGray(fallback)) return fallback
++    val rep = representativeColor(pixels, config.normalizedAccuracy)
++    val ranked = scoreQuantized(q, config.scoring, fallback, rep)
++    return refineSeed(ranked.firstOrNull() ?: fallback, pixels, rep, config)
++}
++
++private fun scoreQuantized(map: Map<Int,Int>, sc: ScoringConfig, fallback: Int, rep: RepColor?): List<Int> {
++    if(map.isEmpty()) return listOf(fallback)
++    val hcts = mutableListOf<Hct>(); val huePop = IntArray(360); var sum = 0.0
++    for((a,p) in map) { if(p<=0) continue; val h=Hct.fromInt(a); hcts.add(h); huePop[MathUtils.sanitizeDegreesInt(h.hue.toInt())]+=p; sum+=p }
++    if(sum<=0.0) return listOf(fallback)
++    val excited = DoubleArray(360); for(h in 0..359){ var s=0.0; for(n in h-14..h+15) s+=huePop[MathUtils.sanitizeDegreesInt(n)]; excited[h]=s/(sum*30) }
++    val tChroma = rep?.hct?.chroma?.coerceIn(12.0,72.0) ?: sc.targetChroma
++    val scored = hcts.map{h-> val prop=(map[h.toInt()]?:0).toDouble()/sum; val ch=h.chroma
++        val chScore=if(ch>=sc.cutoffChroma){ if(ch>=tChroma) sc.weightChromaAbove*(1.0-((ch-tChroma)/100.0).coerceIn(0.0,1.0)) else sc.weightChromaBelow*(ch/tChroma)} else 0.0
++        ScoredHct(h,(prop*sc.weightProportion)+chScore-(excited[MathUtils.sanitizeDegreesInt(h.hue.toInt())].coerceAtMost(sc.cutoffExcitedProportion)*0.5))
++    }.sortedByDescending{it.score}
++    val res=mutableListOf<Int>()
++    for(sh in scored){ val a=sh.hct.toInt()
++        if(res.none{MathUtils.differenceDegrees(Hct.fromInt(it).hue,sh.hct.hue)<sc.minHueDifference||MathUtils.differenceDegrees(Hct.fromInt(it).hue,sh.hct.hue)>sc.maxHueDifference}||res.isEmpty()){res.add(a); if(res.size>=sc.maxColorCount) break}}
++    return res.ifEmpty{listOf(fallback)}
++}
++
++private fun representativeColor(pixels: IntArray, acc: Double): RepColor? {
++    if(pixels.isEmpty()) return null; val thresh=lerp(10.0,6.0,acc); var r=0L;var g=0L;var b=0L;var c=0
++    for(a in pixels){ if(((a ushr 24)and 0xFF)<28) continue; val rr=(a ushr 16)and 0xFF; val gg=(a ushr 8)and 0xFF; val bb=a and 0xFF
++        if(rr+gg+bb<36) continue; if(Hct.fromInt(a).chroma>=thresh){r+=rr;g+=gg;b+=bb;c++}}
++    if(c<=0||c.toDouble()/pixels.size<0.04) return null
++    val argb = (0xFF shl 24)or((r/c).toInt()shl 16)or((g/c).toInt()shl 8)or(b/c).toInt()
++    return RepColor(argb, Hct.fromInt(argb))
++}
++
++private fun refineSeed(candidate: Int, pixels: IntArray, rep: RepColor?, config: ExtractConfig): Int {
++    val acc=config.normalizedAccuracy; val win=lerp(32.0,18.0,acc); val candHct=Hct.fromInt(candidate)
++    var lr=0L;var lg=0L;var lb=0L;var lc=0
++    for(a in pixels){ val h=Hct.fromInt(a); if(MathUtils.differenceDegrees(candHct.hue,h.hue)<=win&&h.chroma>=6.0){lr+=(a ushr 16)and 0xFF;lg+=(a ushr 8)and 0xFF;lb+=a and 0xFF;lc++}}
++    val blend=lerp(0.42f,0.72f,acc.toFloat()); val refined=if(lc>0) blendArgb(candidate,(0xFF shl 24)or((lr/lc).toInt()shl 16)or((lg/lc).toInt()shl 8)or(lb/lc).toInt(),blend) else candidate
++    if(rep!=null){ val hWin=lerp(90.0,52.0,acc); if(MathUtils.differenceDegrees(Hct.fromInt(refined).hue,rep.hct.hue)<=hWin) return blendArgb(refined,rep.argb,lerp(0.0f,0.42f,acc.toFloat()))}; return refined
++}
++
++private fun averageArgb(pixels: IntArray): Int { if(pixels.isEmpty()) return 0xFF6750A4.toInt(); var r=0L;var g=0L;var b=0L; for(a in pixels){r+=(a ushr 16)and 0xFF;g+=(a ushr 8)and 0xFF;b+=a and 0xFF}; val s=pixels.size.toLong(); return (0xFF shl 24)or((r/s).toInt()shl 16)or((g/s).toInt()shl 8)or(b/s).toInt()}
++private fun isNeutralArtwork(map: Map<Int,Int>): Boolean { if(map.isEmpty()) return false; var t=0.0;var n=0.0;var h=0.0;var w=0.0; for((a,p) in map){ if(p<=0) continue; val pp=p.toDouble();val ch=Hct.fromInt(a).chroma;t+=pp;w+=ch*pp;if(ch<=NEUTRAL_CHROMA)n+=pp;if(ch>=HIGH_CHROMA)h+=pp}; return t>0.0&&n/t>=REQ_NEUTRAL&&h/t<=MAX_HIGH&&w/t<=MAX_WEIGHTED}
++private fun isNearGray(argb: Int): Boolean { val r=(argb ushr 16)and 0xFF;val g=(argb ushr 8)and 0xFF;val b=argb and 0xFF; return maxOf(abs(r-g),abs(g-b),abs(r-b))<=MAX_DELTA}
++private fun blendArgb(a: Int, b: Int, ratio: Float): Int { val inv=1f-ratio.coerceIn(0f,1f); fun c(s:Int)=((((a ushr s)and 0xFF)*inv+((b ushr s)and 0xFF)*ratio).roundToInt().coerceIn(0,255)); return (c(24)shl 24)or(c(16)shl 16)or(c(8)shl 8)or c(0)}
++private fun lerp(a: Double, b: Double, f: Double): Double = a+(b-a)*f.coerceIn(0.0,1.0)
++private fun lerp(a: Float, b: Float, f: Float): Float = a+(b-a)*f.coerceIn(0f,1f)
++
++private fun DynamicScheme.toComposeScheme(): ColorScheme = ColorScheme(
++    primary=Color(getPrimary()),onPrimary=Color(getOnPrimary()),primaryContainer=Color(getPrimaryContainer()),onPrimaryContainer=Color(getOnPrimaryContainer()),
++    inversePrimary=Color(getInversePrimary()),secondary=Color(getSecondary()),onSecondary=Color(getOnSecondary()),secondaryContainer=Color(getSecondaryContainer()),onSecondaryContainer=Color(getOnSecondaryContainer()),
++    tertiary=Color(getTertiary()),onTertiary=Color(getOnTertiary()),tertiaryContainer=Color(getTertiaryContainer()),onTertiaryContainer=Color(getOnTertiaryContainer()),
++    background=Color(getBackground()),onBackground=Color(getOnBackground()),surface=Color(getSurface()),onSurface=Color(getOnSurface()),
++    surfaceVariant=Color(getSurfaceVariant()),onSurfaceVariant=Color(getOnSurfaceVariant()),surfaceTint=Color(getSurfaceTint()),inverseSurface=Color(getInverseSurface()),inverseOnSurface=Color(getInverseOnSurface()),
++    error=Color(getError()),onError=Color(getOnError()),errorContainer=Color(getErrorContainer()),onErrorContainer=Color(getOnErrorContainer()),
++    outline=Color(getOutline()),outlineVariant=Color(getOutlineVariant()),scrim=Color(getScrim()),surfaceBright=Color(getSurfaceBright()),surfaceDim=Color(getSurfaceDim()),
++    surfaceContainer=Color(getSurfaceContainer()),surfaceContainerHigh=Color(getSurfaceContainerHigh()),surfaceContainerHighest=Color(getSurfaceContainerHighest()),
++    surfaceContainerLow=Color(getSurfaceContainerLow()),surfaceContainerLowest=Color(getSurfaceContainerLowest()),
++    primaryFixed=Color(getPrimaryFixed()),primaryFixedDim=Color(getPrimaryFixedDim()),onPrimaryFixed=Color(getOnPrimaryFixed()),onPrimaryFixedVariant=Color(getOnPrimaryFixedVariant()),
++    secondaryFixed=Color(getSecondaryFixed()),secondaryFixedDim=Color(getSecondaryFixedDim()),onSecondaryFixed=Color(getOnSecondaryFixed()),onSecondaryFixedVariant=Color(getOnSecondaryFixedVariant()),
++    tertiaryFixed=Color(getTertiaryFixed()),tertiaryFixedDim=Color(getTertiaryFixedDim()),onTertiaryFixed=Color(getOnTertiaryFixed()),onTertiaryFixedVariant=Color(getOnTertiaryFixedVariant()))
++
++private fun grayscaleScheme(scheme: DynamicScheme): ColorScheme { fun g(c:Color):Color{ val hsl=FloatArray(3); androidx.core.graphics.ColorUtils.colorToHSL(c.toArgb(),hsl); hsl[0]=0f;hsl[1]=0f; return Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl))}; val cs=scheme.toComposeScheme()
++    return cs.copy(primary=g(cs.primary),onPrimary=g(cs.onPrimary),primaryContainer=g(cs.primaryContainer),onPrimaryContainer=g(cs.onPrimaryContainer),secondary=g(cs.secondary),onSecondary=g(cs.onSecondary),secondaryContainer=g(cs.secondaryContainer),onSecondaryContainer=g(cs.onSecondaryContainer),tertiary=g(cs.tertiary),onTertiary=g(cs.onTertiary),tertiaryContainer=g(cs.tertiaryContainer),onTertiaryContainer=g(cs.onTertiaryContainer),background=g(cs.background),onBackground=g(cs.onBackground),surface=g(cs.surface),onSurface=g(cs.onSurface),surfaceVariant=g(cs.surfaceVariant),onSurfaceVariant=g(cs.onSurfaceVariant),surfaceContainer=g(cs.surfaceContainer),surfaceContainerHigh=g(cs.surfaceContainerHigh),surfaceContainerHighest=g(cs.surfaceContainerHighest),surfaceContainerLow=g(cs.surfaceContainerLow),surfaceContainerLowest=g(cs.surfaceContainerLowest))}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorSchemeCache.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorSchemeCache.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorSchemeCache.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/ColorSchemeCache.kt	2026-07-03 06:09:55.500266797 +0000
+@@ -0,0 +1,37 @@
++package com.codetrio.spatialflow.ui.theme
++
++import android.content.Context
++import android.graphics.Bitmap
++import android.graphics.Canvas
++import android.util.LruCache
++import coil.imageLoader
++import coil.request.ImageRequest
++import coil.size.Size
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.sync.Mutex
++import kotlinx.coroutines.sync.withLock
++import kotlinx.coroutines.withContext
++
++object ColorSchemeCache {
++    private val memoryCache = LruCache<String, ColorSchemePair>(30)
++    private val mutex = Mutex()
++    private val inProgress = mutableSetOf<String>()
++    fun get(key: String): ColorSchemePair? = memoryCache.get(key)
++    fun put(key: String, v: ColorSchemePair) { memoryCache.put(key, v) }
++    fun evictAll() = memoryCache.evictAll()
++    suspend fun markInProgress(uri: String): Boolean = mutex.withLock {
++        if (inProgress.contains(uri)) false else { inProgress.add(uri); true }
++    }
++    suspend fun markComplete(uri: String) = mutex.withLock { inProgress.remove(uri) }
++    suspend fun loadBitmapForExtraction(ctx: Context, uri: Any): Bitmap? = withContext(Dispatchers.IO) {
++        try {
++            val req = ImageRequest.Builder(ctx).data(uri).allowHardware(false)
++                .size(Size(128,128)).bitmapConfig(Bitmap.Config.ARGB_8888).build()
++            val d = ctx.imageLoader.execute(req).drawable ?: return@withContext null
++            Bitmap.createBitmap(
++                d.intrinsicWidth.coerceAtLeast(1), d.intrinsicHeight.coerceAtLeast(1),
++                Bitmap.Config.ARGB_8888
++            ).also { b -> Canvas(b).let { c -> d.setBounds(0,0,c.width,c.height); d.draw(c) } }
++        } catch (_: Exception) { null }
++    }
++}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/Shape.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/Shape.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/Shape.kt	1970-01-01 00:00:00.000000000 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/Shape.kt	2026-07-03 07:11:51.612912426 +0000
+@@ -0,0 +1,13 @@
++package com.codetrio.spatialflow.ui.theme
++
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.material3.Shapes
++import androidx.compose.ui.unit.dp
++
++val AppShapes = Shapes(
++    extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
++    medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp),
++    extraLarge = RoundedCornerShape(32.dp))
++
++object CardCorners { const val RadiusDp = 28f; const val Smoothness = 60 }
++val PlayerSheetCollapsedCornerRadius = 32.dp
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/Theme.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/Theme.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/Theme.kt	2026-07-03 07:10:32.276912426 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/Theme.kt	2026-07-03 07:12:56.656912426 +0000
+@@ -1,271 +1,50 @@
+-@file:Suppress("UNCHECKED_CAST")
+-
+ package com.codetrio.spatialflow.ui.theme
+ 
+-import android.app.Activity
+-import android.content.ContextWrapper
+-import android.content.SharedPreferences
+-import android.os.Build
++import androidx.compose.animation.Crossfade
++import androidx.compose.animation.core.tween
+ import androidx.compose.foundation.isSystemInDarkTheme
+-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+-import androidx.compose.material3.MaterialExpressiveTheme
+-import androidx.compose.material3.MotionScheme
+-import androidx.compose.material3.darkColorScheme
+-import androidx.compose.material3.dynamicDarkColorScheme
+-import androidx.compose.material3.dynamicLightColorScheme
+-import androidx.compose.material3.lightColorScheme
+-import androidx.compose.runtime.Composable
+-import androidx.compose.runtime.DisposableEffect
+-import androidx.compose.runtime.SideEffect
+-import androidx.compose.runtime.State
+-import androidx.compose.runtime.getValue
+-import androidx.compose.runtime.mutableStateOf
+-import androidx.compose.runtime.remember
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
+ import androidx.compose.ui.graphics.Color
+ import androidx.compose.ui.graphics.toArgb
+ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.platform.LocalView
++import androidx.core.graphics.ColorUtils
+ import androidx.core.view.WindowCompat
+-import androidx.core.view.WindowCompat.getInsetsController
++import android.app.Activity
++import android.content.ContextWrapper
++import android.os.Build
+ 
+-@Composable
+-fun <T> SharedPreferences.observeKey(key: String, defaultValue: T): State<T> {
+-    val state = remember { mutableStateOf(defaultValue) }
+-    DisposableEffect(this, key) {
+-        state.value = when (defaultValue) {
+-            is Boolean -> getBoolean(key, defaultValue) as T
+-            is String -> getString(key, defaultValue) as T
+-            is Float -> getFloat(key, defaultValue) as T
+-            is Int -> getInt(key, defaultValue) as T
+-            is Long -> getLong(key, defaultValue) as T
+-            else -> defaultValue
+-        }
+-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, changedKey ->
+-            if (changedKey == key) {
+-                state.value = when (defaultValue) {
+-                    is Boolean -> prefs.getBoolean(key, defaultValue) as T
+-                    is String -> prefs.getString(key, defaultValue) as T
+-                    is Float -> prefs.getFloat(key, defaultValue) as T
+-                    is Int -> prefs.getInt(key, defaultValue) as T
+-                    is Long -> prefs.getLong(key, defaultValue) as T
+-                    else -> defaultValue
+-                }
+-            }
+-        }
+-        registerOnSharedPreferenceChangeListener(listener)
+-        onDispose {
+-            unregisterOnSharedPreferenceChangeListener(listener)
+-        }
+-    }
+-    return state
+-}
++val LocalAlbumColorScheme = staticCompositionLocalOf<ColorSchemePair?> { null }
++val LocalSpatialFlowDarkTheme = staticCompositionLocalOf { false }
++
++private tailrec fun android.content.Context.findActivity(): Activity? = when(this){ is Activity -> this; is ContextWrapper -> baseContext.findActivity(); else -> null }
+ 
+-/**
+- * SpatialFlow's root composable theme.
+- *
+- * @param darkTheme       Whether to use dark mode colors.
+- * @param content         The composable content.
+- */
+-@Suppress("DEPRECATION")
+-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+ @Composable
+ fun SpatialFlowTheme(
+     darkTheme: Boolean = isSystemInDarkTheme(),
+-    dynamicAlbumColor: Int? = null,
++    albumColorSchemePair: ColorSchemePair? = null,
++    amoledBlack: Boolean = false,
+     content: @Composable () -> Unit
+ ) {
+-    val context = LocalContext.current
+-    val prefs = remember(context) {
+-        context.getSharedPreferences("AppSettings", android.content.Context.MODE_PRIVATE)
+-    }
+-    val amoledEnabled by prefs.observeKey("amoled_black", false)
+-    val albumArtThemeEnabled by prefs.observeKey("dynamic_album_theme", false)
+-
+-    val colorScheme = remember(darkTheme, amoledEnabled, albumArtThemeEnabled, dynamicAlbumColor) {
+-        val baseScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+-            if (darkTheme) dynamicDarkColorScheme(context)
+-            else dynamicLightColorScheme(context)
+-        } else {
+-            if (darkTheme) darkColorScheme(
+-                primary = Primary,
+-                onPrimary = OnPrimary,
+-                primaryContainer = PrimaryContainer,
+-                onPrimaryContainer = OnPrimaryContainer,
+-                background = Surface,
+-                onBackground = OnSurface,
+-                surface = Surface,
+-                onSurface = OnSurface,
+-                surfaceVariant = SurfaceVariant,
+-                onSurfaceVariant = OnSurfaceVariant
+-            )
+-            else lightColorScheme()
+-        }
+-
+-        val finalScheme = if (darkTheme && amoledEnabled && !(albumArtThemeEnabled && dynamicAlbumColor != null)) {
+-            baseScheme.copy(
+-                background = Color.Black,
+-                surface = Color.Black,
+-                surfaceContainer = Color.Black,
+-                surfaceContainerHigh = Color(0xFF0D0D0D),
+-                surfaceContainerHighest = Color(0xFF141414),
+-                surfaceContainerLow = Color.Black,
+-                surfaceContainerLowest = Color.Black
+-            )
+-        } else {
+-            baseScheme
+-        }
+-
+-        if (albumArtThemeEnabled && dynamicAlbumColor != null) {
+-            val seedColor = Color(dynamicAlbumColor)
+-            val hsl = FloatArray(3)
+-            androidx.core.graphics.ColorUtils.colorToHSL(seedColor.toArgb(), hsl)
+-            
+-            val isMonochrome = hsl[1] < 0.06f
+-            val baseHue = hsl[0]
+-            val baseSat = if (isMonochrome) 0f else hsl[1]
+-            
+-            // Saturation calculations that respect monochrome
+-            val primarySat = if (isMonochrome) 0f else baseSat.coerceAtLeast(0.5f)
+-            val primaryContainerSat = if (isMonochrome) 0f else baseSat.coerceAtLeast(0.4f)
+-            val secondarySat = if (isMonochrome) 0f else (baseSat * 0.5f).coerceIn(0.2f, 0.35f)
+-            val secondaryContainerSat = if (isMonochrome) 0f else (baseSat * 0.5f).coerceIn(0.15f, 0.30f)
+-            val tertiarySat = if (isMonochrome) 0f else (baseSat * 0.6f).coerceIn(0.3f, 0.5f)
+-            val tertiaryContainerSat = if (isMonochrome) 0f else (baseSat * 0.6f).coerceIn(0.25f, 0.45f)
+-            
+-            fun colorAt(h: Float, s: Float, l: Float): Color {
+-                return Color(
+-                    androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(h, s, l))
+-                )
+-            }
++    val context = LocalContext.current; val view = LocalView.current
++    val baseScheme = remember(darkTheme) {
++        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { if(darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context) }
++        else { if(darkTheme) darkColorScheme() else lightColorScheme() }}
++
++    val targetScheme = remember(baseScheme, albumColorSchemePair, darkTheme, amoledBlack) {
++        val s = albumColorSchemePair?.let { if(darkTheme) it.dark else it.light } ?: baseScheme
++        if(darkTheme && amoledBlack) s.copy(background=Color.Black, surface=Color.Black, surfaceContainerLowest=Color.Black, surfaceContainerLow=Color.Black, surfaceContainer=Color.Black) else s}
+ 
+-            val finalDynamicScheme = if (darkTheme) {
+-                // Dark Theme Tones
+-                val bgSat = (baseSat * 0.15f).coerceAtMost(0.1f)
+-                
+-                finalScheme.copy(
+-                    background = colorAt(baseHue, bgSat, 0.04f),
+-                    onBackground = colorAt(baseHue, bgSat, 0.90f),
+-                    
+-                    surface = colorAt(baseHue, bgSat, 0.06f),
+-                    onSurface = colorAt(baseHue, bgSat, 0.90f),
+-                    
+-                    surfaceContainerLowest = colorAt(baseHue, bgSat, 0.02f),
+-                    surfaceContainerLow = colorAt(baseHue, bgSat, 0.08f),
+-                    surfaceContainer = colorAt(baseHue, bgSat, 0.12f),
+-                    surfaceContainerHigh = colorAt(baseHue, bgSat, 0.16f),
+-                    surfaceContainerHighest = colorAt(baseHue, bgSat, 0.22f),
+-                    
+-                    surfaceVariant = colorAt(baseHue, bgSat, 0.28f),
+-                    onSurfaceVariant = colorAt(baseHue, bgSat, 0.80f),
+-                    
+-                    primary = colorAt(baseHue, primarySat, 0.75f),
+-                    onPrimary = colorAt(baseHue, primarySat, 0.20f),
+-                    primaryContainer = colorAt(baseHue, primaryContainerSat, 0.25f),
+-                    onPrimaryContainer = colorAt(baseHue, primaryContainerSat, 0.90f),
+-                    
+-                    secondary = colorAt(baseHue, secondarySat, 0.70f),
+-                    onSecondary = colorAt(baseHue, secondarySat, 0.20f),
+-                    secondaryContainer = colorAt(baseHue, secondaryContainerSat, 0.20f),
+-                    onSecondaryContainer = colorAt(baseHue, secondaryContainerSat, 0.85f),
+-                    
+-                    tertiary = colorAt((baseHue + 60f) % 360f, tertiarySat, 0.70f),
+-                    onTertiary = colorAt((baseHue + 60f) % 360f, tertiarySat, 0.20f),
+-                    tertiaryContainer = colorAt((baseHue + 60f) % 360f, tertiaryContainerSat, 0.20f),
+-                    onTertiaryContainer = colorAt((baseHue + 60f) % 360f, tertiaryContainerSat, 0.85f),
+-                    
+-                    outline = colorAt(baseHue, bgSat, 0.60f),
+-                    outlineVariant = colorAt(baseHue, bgSat, 0.30f),
+-                    
+-                    error = colorAt(0f, 0.60f, 0.65f),
+-                    onError = colorAt(0f, 0.60f, 0.20f),
+-                    errorContainer = colorAt(0f, 0.60f, 0.25f),
+-                    onErrorContainer = colorAt(0f, 0.60f, 0.90f)
+-                )
+-            } else {
+-                // Light Theme Tones
+-                val bgSat = (baseSat * 0.15f).coerceAtMost(0.15f)
+-                
+-                finalScheme.copy(
+-                    background = colorAt(baseHue, bgSat, 0.98f),
+-                    onBackground = colorAt(baseHue, bgSat, 0.10f),
+-                    
+-                    surface = colorAt(baseHue, bgSat, 0.98f),
+-                    onSurface = colorAt(baseHue, bgSat, 0.10f),
+-                    
+-                    surfaceContainerLowest = colorAt(baseHue, bgSat, 1.0f),
+-                    surfaceContainerLow = colorAt(baseHue, bgSat, 0.96f),
+-                    surfaceContainer = colorAt(baseHue, bgSat, 0.94f),
+-                    surfaceContainerHigh = colorAt(baseHue, bgSat, 0.90f),
+-                    surfaceContainerHighest = colorAt(baseHue, bgSat, 0.86f),
+-                    
+-                    surfaceVariant = colorAt(baseHue, bgSat, 0.80f),
+-                    onSurfaceVariant = colorAt(baseHue, bgSat, 0.30f),
+-                    
+-                    primary = colorAt(baseHue, primarySat, 0.40f),
+-                    onPrimary = colorAt(baseHue, primarySat, 0.95f),
+-                    primaryContainer = colorAt(baseHue, primaryContainerSat, 0.85f),
+-                    onPrimaryContainer = colorAt(baseHue, primaryContainerSat, 0.10f),
+-                    
+-                    secondary = colorAt(baseHue, secondarySat, 0.45f),
+-                    onSecondary = colorAt(baseHue, secondarySat, 0.95f),
+-                    secondaryContainer = colorAt(baseHue, secondaryContainerSat, 0.85f),
+-                    onSecondaryContainer = colorAt(baseHue, secondaryContainerSat, 0.10f),
+-                    
+-                    tertiary = colorAt((baseHue + 60f) % 360f, tertiarySat, 0.45f),
+-                    onTertiary = colorAt((baseHue + 60f) % 360f, tertiarySat, 0.95f),
+-                    tertiaryContainer = colorAt((baseHue + 60f) % 360f, tertiaryContainerSat, 0.85f),
+-                    onTertiaryContainer = colorAt((baseHue + 60f) % 360f, tertiaryContainerSat, 0.10f),
+-                    
+-                    outline = colorAt(baseHue, bgSat, 0.50f),
+-                    outlineVariant = colorAt(baseHue, bgSat, 0.80f),
+-                    
+-                    error = colorAt(0f, 0.60f, 0.45f),
+-                    onError = colorAt(0f, 0.60f, 0.95f),
+-                    errorContainer = colorAt(0f, 0.60f, 0.85f),
+-                    onErrorContainer = colorAt(0f, 0.60f, 0.10f)
+-                )
+-            }
+-            
+-            // AMOLED black override for dynamic theme
+-            if (darkTheme && amoledEnabled) {
+-                finalDynamicScheme.copy(
+-                    background = Color.Black,
+-                    surface = Color.Black,
+-                    surfaceContainerLowest = Color.Black,
+-                    surfaceContainerLow = Color.Black,
+-                    surfaceContainer = Color.Black
+-                )
+-            } else {
+-                finalDynamicScheme
+-            }
+-        } else {
+-            finalScheme
+-        }
+-    }
+-
+-    val view = LocalView.current
+-    if (!view.isInEditMode) {
++    Crossfade(targetState=targetScheme, animationSpec=tween(500), label="schemeXfade") { currentScheme ->
+         SideEffect {
+-            val activity = view.context.findActivity()
+-            activity?.window?.let { window ->
+-                window.statusBarColor = android.graphics.Color.TRANSPARENT
+-                getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+-            }
+-        }
+-    }
+-
+-    MaterialExpressiveTheme(
+-        colorScheme = colorScheme,
+-        typography = Typography,
+-        motionScheme = MotionScheme.expressive(),
+-        content = content
+-    )
+-}
+-
+-
++            view.context.findActivity()?.window?.let { w ->
++                w.statusBarColor = android.graphics.Color.TRANSPARENT
++                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { w.isStatusBarContrastEnforced = false; w.isNavigationBarContrastEnforced = false }
++                w.navigationBarColor = android.graphics.Color.TRANSPARENT
++                WindowCompat.getInsetsController(w, view).apply {
++                    isAppearanceLightStatusBars = ColorUtils.calculateLuminance(currentScheme.background.toArgb()) > 0.55
++                    isAppearanceLightNavigationBars = ColorUtils.calculateLuminance(currentScheme.background.toArgb()) > 0.55}}}
+ 
+-internal tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
+-    is Activity -> this
+-    is ContextWrapper -> baseContext.findActivity()
+-    else -> null
+-}
+\ No newline at end of file
++        CompositionLocalProvider(LocalAlbumColorScheme provides albumColorSchemePair, LocalSpatialFlowDarkTheme provides darkTheme) {
++            MaterialTheme(colorScheme=currentScheme, typography=Typography, shapes=AppShapes, content=content)}}}
+diff -ruN /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/Type.kt SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/Type.kt
+--- /tmp/SpatialFlow_original/app/src/main/java/com/codetrio/spatialflow/ui/theme/Type.kt	2026-07-03 07:10:32.276912426 +0000
++++ SpatialFlow/app/src/main/java/com/codetrio/spatialflow/ui/theme/Type.kt	2026-07-03 07:11:51.612912426 +0000
+@@ -3,147 +3,44 @@
+ import androidx.compose.material3.Typography
+ import androidx.compose.ui.text.ExperimentalTextApi
+ import androidx.compose.ui.text.TextStyle
+-import androidx.compose.ui.text.font.Font
+-import androidx.compose.ui.text.font.FontFamily
+-import androidx.compose.ui.text.font.FontVariation
+-import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.font.*
++import androidx.compose.ui.text.googlefonts.Font as GFont
++import androidx.compose.ui.text.googlefonts.GoogleFont
++import androidx.compose.ui.text.style.TextGeometricTransform
++import androidx.compose.ui.unit.em
+ import androidx.compose.ui.unit.sp
+ import com.codetrio.spatialflow.R
+ 
+-/**
+- * Google Sans Flex Font Family with ROND axis set to 100%
+- */
+ @OptIn(ExperimentalTextApi::class)
+-val GoogleSansFlex = FontFamily(
+-    Font(
+-        resId = R.font.google_flex,
+-        variationSettings = FontVariation.Settings(
+-            FontVariation.Setting("ROND", 100f)
+-        )
+-    )
+-)
++val GoogleSansRounded = FontFamily(
++    Font(R.font.google_flex, weight = FontWeight.Light, variationSettings = FontVariation.Settings(FontVariation.weight(FontWeight.Light.weight), FontVariation.Setting("ROND", 100f))),
++    Font(R.font.google_flex, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(FontWeight.Normal.weight), FontVariation.Setting("ROND", 100f))),
++    Font(R.font.google_flex, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(FontWeight.Medium.weight), FontVariation.Setting("ROND", 100f))),
++    Font(R.font.google_flex, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(FontWeight.SemiBold.weight), FontVariation.Setting("ROND", 100f))),
++    Font(R.font.google_flex, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(FontWeight.Bold.weight), FontVariation.Setting("ROND", 100f))))
+ 
+-/**
+- * Google Sans Flex Font Family with ROND axis set to 0% (non-rounded)
+- * Used specifically for lyrics to keep layout crisp.
+- */
+ @OptIn(ExperimentalTextApi::class)
+-val GoogleSansFlexNonRounded = FontFamily(
+-    Font(
+-        resId = R.font.google_flex,
+-        variationSettings = FontVariation.Settings(
+-            FontVariation.Setting("ROND", 0f)
+-        )
+-    )
+-)
++val GoogleSansFlex = FontFamily(Font(R.font.google_flex, variationSettings = FontVariation.Settings(FontVariation.Setting("ROND", 0f))))
++
++private val gProvider = GoogleFont.Provider("com.google.android.gms.fonts", "com.google.android.gms", R.array.com_google_android_gms_fonts_certs)
++val MontserratFamily = FontFamily(
++    Font(googleFont = GFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.Black),
++    Font(googleFont = GFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.Bold),
++    Font(googleFont = GFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.SemiBold),
++    Font(googleFont = GFont("Montserrat"), fontProvider = gProvider, weight = FontWeight.Normal))
+ 
+-/**
+- * Global Typography with Google Sans Flex (Max Roundness)
+- */
+ val Typography = Typography(
+-    displayLarge = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 57.sp,
+-        lineHeight = 64.sp,
+-        letterSpacing = (-0.25).sp
+-    ),
+-    displayMedium = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 45.sp,
+-        lineHeight = 52.sp,
+-        letterSpacing = 0.sp
+-    ),
+-    displaySmall = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 36.sp,
+-        lineHeight = 44.sp,
+-        letterSpacing = 0.sp
+-    ),
+-    headlineLarge = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 32.sp,
+-        lineHeight = 40.sp,
+-        letterSpacing = 0.sp
+-    ),
+-    headlineMedium = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.SemiBold,
+-        fontSize = 28.sp,
+-        lineHeight = 36.sp,
+-        letterSpacing = 0.sp
+-    ),
+-    headlineSmall = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 24.sp,
+-        lineHeight = 32.sp,
+-        letterSpacing = 0.sp
+-    ),
+-    titleLarge = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Bold,
+-        fontSize = 22.sp,
+-        lineHeight = 28.sp,
+-        letterSpacing = 0.sp
+-    ),
+-    titleMedium = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Medium,
+-        fontSize = 16.sp,
+-        lineHeight = 24.sp,
+-        letterSpacing = 0.15.sp
+-    ),
+-    titleSmall = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Medium,
+-        fontSize = 14.sp,
+-        lineHeight = 20.sp,
+-        letterSpacing = 0.1.sp
+-    ),
+-    bodyLarge = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 16.sp,
+-        lineHeight = 24.sp,
+-        letterSpacing = 0.5.sp
+-    ),
+-    bodyMedium = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 14.sp,
+-        lineHeight = 20.sp,
+-        letterSpacing = 0.25.sp
+-    ),
+-    bodySmall = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 12.sp,
+-        lineHeight = 16.sp,
+-        letterSpacing = 0.4.sp
+-    ),
+-    labelLarge = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Medium,
+-        fontSize = 14.sp,
+-        lineHeight = 20.sp,
+-        letterSpacing = 0.1.sp
+-    ),
+-    labelMedium = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Medium,
+-        fontSize = 12.sp,
+-        lineHeight = 16.sp,
+-        letterSpacing = 0.5.sp
+-    ),
+-    labelSmall = TextStyle(
+-        fontFamily = GoogleSansFlex,
+-        fontWeight = FontWeight.Medium,
+-        fontSize = 11.sp,
+-        lineHeight = 16.sp,
+-        letterSpacing = 0.5.sp
+-    )
+-)
++    displayLarge = TextStyle(fontFamily = MontserratFamily, fontWeight = FontWeight.SemiBold, fontSize = 60.sp, textGeometricTransform = TextGeometricTransform(scaleX = 1.5f), letterSpacing = (-0.02).em, lineHeight = 0.95.em),
++    displayMedium = TextStyle(fontFamily = MontserratFamily, fontWeight = FontWeight.Normal, fontSize = 50.sp, letterSpacing = (-0.02).em, lineHeight = 0.95.em),
++    headlineLarge = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 40.sp),
++    headlineMedium = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 36.sp),
++    headlineSmall = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 32.sp),
++    titleLarge = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Normal, fontSize = 22.sp, lineHeight = 28.sp),
++    titleMedium = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Medium, fontSize = 18.sp, lineHeight = 24.sp, letterSpacing = 0.15.sp),
++    titleSmall = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
++    bodyLarge = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.5.sp),
++    bodyMedium = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.25.sp),
++    bodySmall = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.4.sp),
++    labelLarge = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 20.sp),
++    labelMedium = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 16.sp),
++    labelSmall = TextStyle(fontFamily = GoogleSansRounded, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp))
