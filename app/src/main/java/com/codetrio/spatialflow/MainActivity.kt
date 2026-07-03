@@ -424,8 +424,10 @@ class MainActivity : AppCompatActivity() {
                                     )
                                 }
                                 composable("library") {
+                                    val accountViewModel: com.codetrio.spatialflow.viewmodel.AccountViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
                                     LibraryScreen(
                                         viewModel = playerViewModel,
+                                        accountViewModel = accountViewModel,
                                         onEditSong = { song ->
                                             editingSong = song
                                             currentNavController.navigate("tag_editor")
@@ -438,6 +440,24 @@ class MainActivity : AppCompatActivity() {
                                                 launchSingleTop = true
                                                 restoreState = true
                                             }
+                                        },
+                                        onAlbumClick = { id ->
+                                            exploreViewModel.cameFromLibrary = true
+                                            exploreViewModel.loadAlbum(id)
+                                            currentNavController.navigate("explore")
+                                        },
+                                        onPlaylistClick = { id ->
+                                            exploreViewModel.cameFromLibrary = true
+                                            exploreViewModel.loadPlaylist(id)
+                                            currentNavController.navigate("explore")
+                                        },
+                                        onArtistClick = { id ->
+                                            exploreViewModel.cameFromLibrary = true
+                                            exploreViewModel.loadArtist(id)
+                                            currentNavController.navigate("explore")
+                                        },
+                                        onConnectClick = {
+                                            currentNavController.navigate("google_signin")
                                         }
                                     )
                                 }

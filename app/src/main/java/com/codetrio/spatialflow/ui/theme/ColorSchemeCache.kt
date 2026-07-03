@@ -11,166 +11,141 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.size.Size
 import com.codetrio.spatialflow.data.cache.CachedColorScheme
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-data class ColorSchemeData(
-    val primary: Int, val onPrimary: Int, val primaryContainer: Int, val onPrimaryContainer: Int,
-    val inversePrimary: Int, val secondary: Int, val onSecondary: Int, val secondaryContainer: Int, val onSecondaryContainer: Int,
-    val tertiary: Int, val onTertiary: Int, val tertiaryContainer: Int, val onTertiaryContainer: Int,
-    val background: Int, val onBackground: Int, val surface: Int, val onSurface: Int,
-    val surfaceVariant: Int, val onSurfaceVariant: Int, val surfaceTint: Int,
-    val inverseSurface: Int, val inverseOnSurface: Int, val error: Int, val onError: Int,
-    val errorContainer: Int, val onErrorContainer: Int, val outline: Int, val outlineVariant: Int, val scrim: Int,
-    val surfaceBright: Int, val surfaceDim: Int, val surfaceContainer: Int, val surfaceContainerHigh: Int,
-    val surfaceContainerHighest: Int, val surfaceContainerLow: Int, val surfaceContainerLowest: Int,
-    val primaryFixed: Int, val primaryFixedDim: Int, val onPrimaryFixed: Int, val onPrimaryFixedVariant: Int,
-    val secondaryFixed: Int, val secondaryFixedDim: Int, val onSecondaryFixed: Int, val onSecondaryFixedVariant: Int,
-    val tertiaryFixed: Int, val tertiaryFixedDim: Int, val onTertiaryFixed: Int, val onTertiaryFixedVariant: Int
-)
-
 object ColorSchemeCache {
     private val memoryCache = LruCache<String, ColorSchemePair>(30)
     private val mutex = Mutex()
     private val inProgress = mutableSetOf<String>()
+    private val gson = Gson()
 
     fun get(key: String): ColorSchemePair? = memoryCache.get(key)
-    fun put(key: String, value: ColorSchemePair) { memoryCache.put(key, value) }
+    fun put(key: String, v: ColorSchemePair) { memoryCache.put(key, v) }
     fun evictAll() = memoryCache.evictAll()
-    suspend fun markInProgress(uri: String): Boolean = mutex.withLock { if (inProgress.contains(uri)) false else { inProgress.add(uri); true } }
+    suspend fun markInProgress(uri: String): Boolean = mutex.withLock {
+        if (inProgress.contains(uri)) false else { inProgress.add(uri); true }
+    }
     suspend fun markComplete(uri: String) = mutex.withLock { inProgress.remove(uri) }
-
-    suspend fun loadBitmapForExtraction(context: Context, uri: Any): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun loadBitmapForExtraction(ctx: Context, uri: Any): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            val request = ImageRequest.Builder(context).data(uri).allowHardware(false).size(Size(128, 128)).bitmapConfig(Bitmap.Config.ARGB_8888).build()
-            val d = context.imageLoader.execute(request).drawable ?: return@withContext null
-            Bitmap.createBitmap(d.intrinsicWidth.coerceAtLeast(1), d.intrinsicHeight.coerceAtLeast(1), Bitmap.Config.ARGB_8888).also { b -> Canvas(b).let { c -> d.setBounds(0, 0, c.width, c.height); d.draw(c) } }
+            val req = ImageRequest.Builder(ctx).data(uri).allowHardware(false)
+                .size(Size(128,128)).bitmapConfig(Bitmap.Config.ARGB_8888).build()
+            val d = ctx.imageLoader.execute(req).drawable ?: return@withContext null
+            Bitmap.createBitmap(
+                d.intrinsicWidth.coerceAtLeast(1), d.intrinsicHeight.coerceAtLeast(1),
+                Bitmap.Config.ARGB_8888
+            ).also { b -> Canvas(b).let { c -> d.setBounds(0,0,c.width,c.height); d.draw(c) } }
         } catch (_: Exception) { null }
     }
 
-    fun serializeColorScheme(scheme: ColorScheme): String {
-        val data = ColorSchemeData(
-            primary = scheme.primary.toArgb(),
-            onPrimary = scheme.onPrimary.toArgb(),
-            primaryContainer = scheme.primaryContainer.toArgb(),
-            onPrimaryContainer = scheme.onPrimaryContainer.toArgb(),
-            inversePrimary = scheme.inversePrimary.toArgb(),
-            secondary = scheme.secondary.toArgb(),
-            onSecondary = scheme.onSecondary.toArgb(),
-            secondaryContainer = scheme.secondaryContainer.toArgb(),
-            onSecondaryContainer = scheme.onSecondaryContainer.toArgb(),
-            tertiary = scheme.tertiary.toArgb(),
-            onTertiary = scheme.onTertiary.toArgb(),
-            tertiaryContainer = scheme.tertiaryContainer.toArgb(),
-            onTertiaryContainer = scheme.onTertiaryContainer.toArgb(),
-            background = scheme.background.toArgb(),
-            onBackground = scheme.onBackground.toArgb(),
-            surface = scheme.surface.toArgb(),
-            onSurface = scheme.onSurface.toArgb(),
-            surfaceVariant = scheme.surfaceVariant.toArgb(),
-            onSurfaceVariant = scheme.onSurfaceVariant.toArgb(),
-            surfaceTint = scheme.surfaceTint.toArgb(),
-            inverseSurface = scheme.inverseSurface.toArgb(),
-            inverseOnSurface = scheme.inverseOnSurface.toArgb(),
-            error = scheme.error.toArgb(),
-            onError = scheme.onError.toArgb(),
-            errorContainer = scheme.errorContainer.toArgb(),
-            onErrorContainer = scheme.onErrorContainer.toArgb(),
-            outline = scheme.outline.toArgb(),
-            outlineVariant = scheme.outlineVariant.toArgb(),
-            scrim = scheme.scrim.toArgb(),
-            surfaceBright = scheme.surfaceBright.toArgb(),
-            surfaceDim = scheme.surfaceDim.toArgb(),
-            surfaceContainer = scheme.surfaceContainer.toArgb(),
-            surfaceContainerHigh = scheme.surfaceContainerHigh.toArgb(),
-            surfaceContainerHighest = scheme.surfaceContainerHighest.toArgb(),
-            surfaceContainerLow = scheme.surfaceContainerLow.toArgb(),
-            surfaceContainerLowest = scheme.surfaceContainerLowest.toArgb(),
-            primaryFixed = scheme.primaryFixed.toArgb(),
-            primaryFixedDim = scheme.primaryFixedDim.toArgb(),
-            onPrimaryFixed = scheme.onPrimaryFixed.toArgb(),
-            onPrimaryFixedVariant = scheme.onPrimaryFixedVariant.toArgb(),
-            secondaryFixed = scheme.secondaryFixed.toArgb(),
-            secondaryFixedDim = scheme.secondaryFixedDim.toArgb(),
-            onSecondaryFixed = scheme.onSecondaryFixed.toArgb(),
-            onSecondaryFixedVariant = scheme.onSecondaryFixedVariant.toArgb(),
-            tertiaryFixed = scheme.tertiaryFixed.toArgb(),
-            tertiaryFixedDim = scheme.tertiaryFixedDim.toArgb(),
-            onTertiaryFixed = scheme.onTertiaryFixed.toArgb(),
-            onTertiaryFixedVariant = scheme.onTertiaryFixedVariant.toArgb()
-        )
-        return com.google.gson.Gson().toJson(data)
-    }
-
-    fun deserializeColorScheme(json: String): ColorScheme {
-        val data = com.google.gson.Gson().fromJson(json, ColorSchemeData::class.java)
-        return ColorScheme(
-            primary = Color(data.primary),
-            onPrimary = Color(data.onPrimary),
-            primaryContainer = Color(data.primaryContainer),
-            onPrimaryContainer = Color(data.onPrimaryContainer),
-            inversePrimary = Color(data.inversePrimary),
-            secondary = Color(data.secondary),
-            onSecondary = Color(data.onSecondary),
-            secondaryContainer = Color(data.secondaryContainer),
-            onSecondaryContainer = Color(data.onSecondaryContainer),
-            tertiary = Color(data.tertiary),
-            onTertiary = Color(data.onTertiary),
-            tertiaryContainer = Color(data.tertiaryContainer),
-            onTertiaryContainer = Color(data.onTertiaryContainer),
-            background = Color(data.background),
-            onBackground = Color(data.onBackground),
-            surface = Color(data.surface),
-            onSurface = Color(data.onSurface),
-            surfaceVariant = Color(data.surfaceVariant),
-            onSurfaceVariant = Color(data.onSurfaceVariant),
-            surfaceTint = Color(data.surfaceTint),
-            inverseSurface = Color(data.inverseSurface),
-            inverseOnSurface = Color(data.inverseOnSurface),
-            error = Color(data.error),
-            onError = Color(data.onError),
-            errorContainer = Color(data.errorContainer),
-            onErrorContainer = Color(data.onErrorContainer),
-            outline = Color(data.outline),
-            outlineVariant = Color(data.outlineVariant),
-            scrim = Color(data.scrim),
-            surfaceBright = Color(data.surfaceBright),
-            surfaceDim = Color(data.surfaceDim),
-            surfaceContainer = Color(data.surfaceContainer),
-            surfaceContainerHigh = Color(data.surfaceContainerHigh),
-            surfaceContainerHighest = Color(data.surfaceContainerHighest),
-            surfaceContainerLow = Color(data.surfaceContainerLow),
-            surfaceContainerLowest = Color(data.surfaceContainerLowest),
-            primaryFixed = Color(data.primaryFixed),
-            primaryFixedDim = Color(data.primaryFixedDim),
-            onPrimaryFixed = Color(data.onPrimaryFixed),
-            onPrimaryFixedVariant = Color(data.onPrimaryFixedVariant),
-            secondaryFixed = Color(data.secondaryFixed),
-            secondaryFixedDim = Color(data.secondaryFixedDim),
-            onSecondaryFixed = Color(data.onSecondaryFixed),
-            onSecondaryFixedVariant = Color(data.onSecondaryFixedVariant),
-            tertiaryFixed = Color(data.tertiaryFixed),
-            tertiaryFixedDim = Color(data.tertiaryFixedDim),
-            onTertiaryFixed = Color(data.onTertiaryFixed),
-            onTertiaryFixedVariant = Color(data.onTertiaryFixedVariant)
-        )
-    }
-
     fun serializeColorSchemePair(uri: String, style: String, pair: ColorSchemePair): CachedColorScheme {
+        val lightMap = colorSchemeToMap(pair.light)
+        val darkMap = colorSchemeToMap(pair.dark)
         return CachedColorScheme(
             uri = uri,
             paletteStyle = style,
-            lightSchemeJson = serializeColorScheme(pair.light),
-            darkSchemeJson = serializeColorScheme(pair.dark)
+            lightSchemeJson = gson.toJson(lightMap),
+            darkSchemeJson = gson.toJson(darkMap)
         )
     }
 
     fun deserializeColorSchemePair(cached: CachedColorScheme): ColorSchemePair {
+        val lightType = object : com.google.gson.reflect.TypeToken<Map<String, Int>>() {}.type
+        val lightMap: Map<String, Int> = gson.fromJson(cached.lightSchemeJson, lightType)
+        val darkMap: Map<String, Int> = gson.fromJson(cached.darkSchemeJson, lightType)
         return ColorSchemePair(
-            light = deserializeColorScheme(cached.lightSchemeJson),
-            dark = deserializeColorScheme(cached.darkSchemeJson)
+            light = mapToColorScheme(lightMap, false),
+            dark = mapToColorScheme(darkMap, true)
+        )
+    }
+
+    private fun colorSchemeToMap(scheme: ColorScheme): Map<String, Int> {
+        return mapOf(
+            "primary" to scheme.primary.toArgb(),
+            "onPrimary" to scheme.onPrimary.toArgb(),
+            "primaryContainer" to scheme.primaryContainer.toArgb(),
+            "onPrimaryContainer" to scheme.onPrimaryContainer.toArgb(),
+            "inversePrimary" to scheme.inversePrimary.toArgb(),
+            "secondary" to scheme.secondary.toArgb(),
+            "onSecondary" to scheme.onSecondary.toArgb(),
+            "secondaryContainer" to scheme.secondaryContainer.toArgb(),
+            "onSecondaryContainer" to scheme.onSecondaryContainer.toArgb(),
+            "tertiary" to scheme.tertiary.toArgb(),
+            "onTertiary" to scheme.onTertiary.toArgb(),
+            "tertiaryContainer" to scheme.tertiaryContainer.toArgb(),
+            "onTertiaryContainer" to scheme.onTertiaryContainer.toArgb(),
+            "background" to scheme.background.toArgb(),
+            "onBackground" to scheme.onBackground.toArgb(),
+            "surface" to scheme.surface.toArgb(),
+            "onSurface" to scheme.onSurface.toArgb(),
+            "surfaceVariant" to scheme.surfaceVariant.toArgb(),
+            "onSurfaceVariant" to scheme.onSurfaceVariant.toArgb(),
+            "surfaceTint" to scheme.surfaceTint.toArgb(),
+            "inverseSurface" to scheme.inverseSurface.toArgb(),
+            "inverseOnSurface" to scheme.inverseOnSurface.toArgb(),
+            "error" to scheme.error.toArgb(),
+            "onError" to scheme.onError.toArgb(),
+            "errorContainer" to scheme.errorContainer.toArgb(),
+            "onErrorContainer" to scheme.onErrorContainer.toArgb(),
+            "outline" to scheme.outline.toArgb(),
+            "outlineVariant" to scheme.outlineVariant.toArgb(),
+            "scrim" to scheme.scrim.toArgb(),
+            "surfaceBright" to scheme.surfaceBright.toArgb(),
+            "surfaceDim" to scheme.surfaceDim.toArgb(),
+            "surfaceContainerLowest" to scheme.surfaceContainerLowest.toArgb(),
+            "surfaceContainerLow" to scheme.surfaceContainerLow.toArgb(),
+            "surfaceContainer" to scheme.surfaceContainer.toArgb(),
+            "surfaceContainerHigh" to scheme.surfaceContainerHigh.toArgb(),
+            "surfaceContainerHighest" to scheme.surfaceContainerHighest.toArgb()
+        )
+    }
+
+    private fun mapToColorScheme(map: Map<String, Int>, isDark: Boolean): ColorScheme {
+        val fallback = if (isDark) androidx.compose.material3.darkColorScheme() else androidx.compose.material3.lightColorScheme()
+        fun getColor(key: String, default: Color): Color {
+            return map[key]?.let { Color(it) } ?: default
+        }
+        return ColorScheme(
+            primary = getColor("primary", fallback.primary),
+            onPrimary = getColor("onPrimary", fallback.onPrimary),
+            primaryContainer = getColor("primaryContainer", fallback.primaryContainer),
+            onPrimaryContainer = getColor("onPrimaryContainer", fallback.onPrimaryContainer),
+            inversePrimary = getColor("inversePrimary", fallback.inversePrimary),
+            secondary = getColor("secondary", fallback.secondary),
+            onSecondary = getColor("onSecondary", fallback.onSecondary),
+            secondaryContainer = getColor("secondaryContainer", fallback.secondaryContainer),
+            onSecondaryContainer = getColor("onSecondaryContainer", fallback.onSecondaryContainer),
+            tertiary = getColor("tertiary", fallback.tertiary),
+            onTertiary = getColor("onTertiary", fallback.onTertiary),
+            tertiaryContainer = getColor("tertiaryContainer", fallback.tertiaryContainer),
+            onTertiaryContainer = getColor("onTertiaryContainer", fallback.onTertiaryContainer),
+            background = getColor("background", fallback.background),
+            onBackground = getColor("onBackground", fallback.onBackground),
+            surface = getColor("surface", fallback.surface),
+            onSurface = getColor("onSurface", fallback.onSurface),
+            surfaceVariant = getColor("surfaceVariant", fallback.surfaceVariant),
+            onSurfaceVariant = getColor("onSurfaceVariant", fallback.onSurfaceVariant),
+            surfaceTint = getColor("surfaceTint", fallback.surfaceTint),
+            inverseSurface = getColor("inverseSurface", fallback.inverseSurface),
+            inverseOnSurface = getColor("inverseOnSurface", fallback.inverseOnSurface),
+            error = getColor("error", fallback.error),
+            onError = getColor("onError", fallback.onError),
+            errorContainer = getColor("errorContainer", fallback.errorContainer),
+            onErrorContainer = getColor("onErrorContainer", fallback.onErrorContainer),
+            outline = getColor("outline", fallback.outline),
+            outlineVariant = getColor("outlineVariant", fallback.outlineVariant),
+            scrim = getColor("scrim", fallback.scrim),
+            surfaceBright = getColor("surfaceBright", fallback.surfaceBright),
+            surfaceDim = getColor("surfaceDim", fallback.surfaceDim),
+            surfaceContainerLowest = getColor("surfaceContainerLowest", fallback.surfaceContainerLowest),
+            surfaceContainerLow = getColor("surfaceContainerLow", fallback.surfaceContainerLow),
+            surfaceContainer = getColor("surfaceContainer", fallback.surfaceContainer),
+            surfaceContainerHigh = getColor("surfaceContainerHigh", fallback.surfaceContainerHigh),
+            surfaceContainerHighest = getColor("surfaceContainerHighest", fallback.surfaceContainerHighest)
         )
     }
 }

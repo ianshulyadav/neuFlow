@@ -1401,6 +1401,8 @@ fun OnlineSongBottomSheet(
             val menuItems = listOf(
                 Triple("Start mix", Icons.Default.Radio) {
                     exploreViewModel.playOnlineSongWithQueue(song, listOf(song), 0)
+                    playerSharedViewModel.setSongList(listOf(onlineSongItem))
+                    playerSharedViewModel.playSongAtIndex(0)
                     com.codetrio.spatialflow.ui.SnackbarController.showMessage("Starting mix based on ${song.title}")
                     onDismissRequest()
                 },

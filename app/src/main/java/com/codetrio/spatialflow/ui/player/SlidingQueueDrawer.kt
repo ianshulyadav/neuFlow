@@ -28,10 +28,33 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.codetrio.spatialflow.R
 import com.codetrio.spatialflow.model.SongItem
-import com.codetrio.spatialflow.ui.QueueListItem
-import com.codetrio.spatialflow.ui.rememberDragDropState
 import com.codetrio.spatialflow.viewmodel.PlayerSharedViewModel
 import kotlin.math.abs
+import android.annotation.SuppressLint
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListItemInfo
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Menu
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -429,3 +452,287 @@ fun SlidingQueueDrawer(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun QueueListItem(
+    song: SongItem,
+    isPlaying: Boolean,
+    shapes: ListItemShapes,
+    showReorderControls: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    dragDropState: DragDropState? = null,
+    index: Int = -1,
+    @SuppressLint("ModifierParameter") modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    ListItem(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        leadingContent = {
+            val albumArtModel = remember(song.id) { song.getAlbumArtUri() ?: R.drawable.default_album_art }
+            Box(
+                modifier = Modifier.size(52.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = albumArtModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
+                )
+                if (isPlaying) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Playing",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        },
+        content = {
+            Text(
+                text = song.title,
+                fontWeight = if (isPlaying) FontWeight.ExtraBold else FontWeight.SemiBold,
+                fontSize = 16.sp,
+                color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        supportingContent = {
+            Text(
+                text = song.artist,
+                fontSize = 13.sp,
+                color = if (isPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        trailingContent = {
+            if (showReorderControls) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Options",
+                            tint = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Move Up") },
+                            onClick = {
+                                showMenu = false
+                                onMoveUp()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move Down") },
+                            onClick = {
+                                showMenu = false
+                                onMoveDown()
+                            }
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(4.dp))
+                    
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Drag to reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .size(32.dp)
+                            .padding(4.dp)
+                            .pointerInput(dragDropState) {
+                                if (dragDropState == null || index < 0) return@pointerInput
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        val item = dragDropState.lazyListState.layoutInfo.visibleItemsInfo.find { it.index == index }
+                                        if (item != null) {
+                                            dragDropState.onDragStart(Offset(offset.x, offset.y + item.offset))
+                                        }
+                                    },
+                                    onDragEnd = { dragDropState.onDragInterrupted() },
+                                    onDragCancel = { dragDropState.onDragInterrupted() },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragDropState.onDrag(dragAmount)
+                                    }
+                                )
+                            }
+                    )
+                }
+            }
+        },
+        shapes = shapes,
+        colors = ListItemDefaults.colors(
+            containerColor = if (isPlaying) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+            } else {
+                Color.Transparent
+            }
+        )
+    )
+}
+
+class DragDropState(
+    val lazyListState: LazyListState,
+    private val scope: CoroutineScope,
+    private val onMove: (Int, Int) -> Unit
+) {
+    var draggedDistance by mutableStateOf(0f)
+    var initiallyDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
+    var currentIndexOfDraggedItem by mutableStateOf<Int?>(null)
+    private var autoScrollJob: Job? = null
+    private var autoScrollDeltaPx: Float = 0f
+    private var lastTargetIndex: Int? = null
+
+    val elementDisplacement: Float?
+        get() = currentIndexOfDraggedItem?.let { currentIndex ->
+            lazyListState.layoutInfo.visibleItemsInfo
+                .firstOrNull { it.index == currentIndex }
+                ?.let { item ->
+                    (initiallyDraggedElement?.offset ?: 0).toFloat() + draggedDistance - item.offset
+                }
+        }
+
+    fun onDragStart(offset: Offset) {
+        stopAutoScroll()
+        lastTargetIndex = null
+        lazyListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { item -> offset.y.toInt() in item.offset..(item.offset + item.size) }
+            ?.also {
+                initiallyDraggedElement = it
+                currentIndexOfDraggedItem = it.index
+            }
+    }
+
+    fun onDragInterrupted() {
+        initiallyDraggedElement = null
+        currentIndexOfDraggedItem = null
+        draggedDistance = 0f
+        lastTargetIndex = null
+        stopAutoScroll()
+    }
+
+    fun onDrag(dragAmount: Offset) {
+        draggedDistance += dragAmount.y
+
+        val initialOffset = initiallyDraggedElement?.offset ?: return
+        val currentOffset = initialOffset + draggedDistance
+        val size = initiallyDraggedElement?.size ?: return
+        
+        val currentCenter = currentOffset + size / 2f
+
+        val currentIndex = currentIndexOfDraggedItem ?: return
+        val visibleItems = lazyListState.layoutInfo.visibleItemsInfo
+        
+        // Nearest item detection
+        val targetItem = visibleItems.minByOrNull { item ->
+            kotlin.math.abs((item.offset + item.size / 2f) - currentCenter)
+        }
+
+        if (
+            targetItem != null && 
+            targetItem.index != currentIndex && 
+            targetItem.index != lastTargetIndex
+        ) {
+            lastTargetIndex = targetItem.index
+
+            onMove(currentIndex, targetItem.index)
+            currentIndexOfDraggedItem = targetItem.index
+
+            // Re-anchor Dragged Item
+            initiallyDraggedElement = lazyListState.layoutInfo.visibleItemsInfo
+                .firstOrNull { it.index == targetItem.index }
+            draggedDistance = 0f
+        }
+        
+        // Use exact visible window limits to prevent jarring scrolling
+        val viewportStart = lazyListState.layoutInfo.viewportStartOffset.toFloat()
+        val viewportEnd = lazyListState.layoutInfo.viewportEndOffset.toFloat()
+        val overscrollThreshold = 80f
+
+        // Smoother delta values
+        val scrollDelta = when {
+            currentOffset < viewportStart + overscrollThreshold -> -20f
+            currentOffset + size > viewportEnd - overscrollThreshold -> 20f
+            else -> 0f
+        }
+        updateAutoScroll(scrollDelta)
+    }
+
+    private fun updateAutoScroll(scrollDeltaPx: Float) {
+        if (scrollDeltaPx == 0f) {
+            stopAutoScroll()
+            return
+        }
+        autoScrollDeltaPx = scrollDeltaPx
+        if (autoScrollJob?.isActive == true) return
+
+        autoScrollJob = scope.launch {
+            while (currentIndexOfDraggedItem != null) {
+                val delta = autoScrollDeltaPx
+                if (delta == 0f) break
+                lazyListState.scrollBy(delta)
+                delay(16L.milliseconds)
+            }
+        }
+    }
+
+    private fun stopAutoScroll() {
+        autoScrollDeltaPx = 0f
+        autoScrollJob?.cancel()
+        autoScrollJob = null
+    }
+}
+
+@Composable
+fun rememberDragDropState(
+    lazyListState: LazyListState,
+    onMove: (Int, Int) -> Unit
+): DragDropState {
+    val scope = rememberCoroutineScope()
+    val state = remember(lazyListState) {
+        DragDropState(lazyListState, scope, onMove)
+    }
+    return state
+}
+
+fun Modifier.dragContainer(dragDropState: DragDropState, enabled: Boolean): Modifier {
+    if (!enabled) return this
+    return this.then(
+        Modifier.pointerInput(dragDropState) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { offset -> dragDropState.onDragStart(offset) },
+                onDragEnd = { dragDropState.onDragInterrupted() },
+                onDragCancel = { dragDropState.onDragInterrupted() },
+                onDrag = { change, dragAmount ->
+                    change.consume()
+                    dragDropState.onDrag(dragAmount)
+                }
+            )
+        }
+    )
+}
+

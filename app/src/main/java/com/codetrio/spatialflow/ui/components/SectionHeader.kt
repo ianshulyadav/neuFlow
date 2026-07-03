@@ -11,10 +11,5 @@ import com.codetrio.spatialflow.ui.theme.GoogleSansRounded
 
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier) {
-    Text(
-        text = title, style = MaterialTheme.typography.titleLarge,
-        fontFamily = GoogleSansRounded, fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-    )
+    Text(text = title, style = MaterialTheme.typography.titleLarge, fontFamily = GoogleSansRounded, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, modifier = modifier.padding(horizontal = 24.dp, vertical = 12.dp))
 }

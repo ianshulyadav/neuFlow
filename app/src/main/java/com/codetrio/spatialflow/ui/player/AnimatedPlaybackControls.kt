@@ -10,9 +10,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,123 +27,32 @@ import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 
 private enum class Btn { NONE, PREV, PP, NEXT }
 
-/**
- * EXACT PIXELPLAYER ANIMATED PLAYBACK CONTROLS.
- *
- * Features:
- * - Play/Pause button uses AbsoluteSmoothCornerShape with animated corner radius
- *   (60dp when paused/playing, 26dp when the opposite — the "morphing pill" effect)
- * - Weight animation: the pressed button expands to 1.1x, others compress to 0.65x
- * - Button lock: skip buttons lock for 600ms to prevent double-tap issues
- * - Delayed visual sync: play state waits 220ms before updating icon after release
- * - Previous/Next: CircleShape background
- *
- * All colors come from parameters — pass scheme tokens from the parent.
- */
 @Composable
 fun AnimatedPlaybackControls(
-    isPlayingProvider: () -> Boolean,
-    onPrevious: () -> Unit,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier,
-    height: Dp = 90.dp,
-    baseWeight: Float = 1f,
-    expansionWeight: Float = 1.1f,
-    compressionWeight: Float = 0.65f,
-    pressAnimationSpec: AnimationSpec<Float> = tween(200, easing = FastOutSlowInEasing),
-    releaseDelay: Long = 220L,
-    playPauseCornerPlaying: Dp = 60.dp,
-    playPauseCornerPaused: Dp = 26.dp,
-    colorPreviousButton: Color = MaterialTheme.colorScheme.secondaryContainer,
-    colorNextButton: Color = MaterialTheme.colorScheme.secondaryContainer,
-    colorPlayPause: Color = MaterialTheme.colorScheme.primary,
-    tintPlayPauseIcon: Color = MaterialTheme.colorScheme.onPrimary,
-    tintPreviousIcon: Color = MaterialTheme.colorScheme.onSecondaryContainer,
-    tintNextIcon: Color = MaterialTheme.colorScheme.onSecondaryContainer,
-    playPauseIconSize: Dp = 36.dp,
-    iconSize: Dp = 32.dp,
+    isPlayingProvider: () -> Boolean, onPrevious: () -> Unit, onPlayPause: () -> Unit, onNext: () -> Unit,
+    modifier: Modifier = Modifier, height: Dp = 90.dp, pressAnimationSpec: AnimationSpec<Float> = tween(200, easing = FastOutSlowInEasing),
+    releaseDelay: Long = 220L, ppCornerPlaying: Dp = 60.dp, ppCornerPaused: Dp = 26.dp,
+    colorPrev: Color = MaterialTheme.colorScheme.secondaryContainer, colorNext: Color = MaterialTheme.colorScheme.secondaryContainer,
+    colorPP: Color = MaterialTheme.colorScheme.primary, tintPP: Color = MaterialTheme.colorScheme.onPrimary,
+    tintPrev: Color = MaterialTheme.colorScheme.onSecondaryContainer, tintNext: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    ppIconSize: Dp = 36.dp, iconSize: Dp = 32.dp
 ) {
-    val isPlaying = isPlayingProvider()
-    var lastClicked by remember { mutableStateOf<Btn?>(null) }
-    var clickTrigger by remember { mutableStateOf(0) }
-    val latestIsPlaying by rememberUpdatedState(isPlayingProvider)
-    val isPlayPauseLocked = lastClicked == Btn.NEXT || lastClicked == Btn.PREV
-    var playPauseVisual by remember { mutableStateOf(isPlaying) }
-    var pendingVisual by remember { mutableStateOf<Boolean?>(null) }
-    val haptic = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
-    val defaultSpatialDpSpec = remember { MotionScheme.expressive().defaultSpatialSpec<Dp>() }
-
-    // ── RELEASE TIMER ──
-    LaunchedEffect(lastClicked, clickTrigger) {
-        if (lastClicked != null) {
-            delay(when (lastClicked) { Btn.NEXT, Btn.PREV -> 600L; else -> releaseDelay })
-            lastClicked = null
-        }
-    }
-
-    // ── VISUAL STATE SYNC (delayed on pause) ──
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) { pendingVisual = true; return@LaunchedEffect }
-        if (!latestIsPlaying()) { delay(releaseDelay); if (!latestIsPlaying()) pendingVisual = false }
-    }
-    LaunchedEffect(isPlayPauseLocked, pendingVisual) {
-        if (!isPlayPauseLocked) pendingVisual?.let { playPauseVisual = it; pendingVisual = null }
-    }
-
-    Box(modifier = modifier.fillMaxWidth().height(height)) {
-        Row(
-            Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            fun weightFor(b: Btn) = when (lastClicked) { b -> expansionWeight; null -> baseWeight; else -> compressionWeight }
-
-            // ── PREVIOUS ──
-            val prevWeight by animateFloatAsState(weightFor(Btn.PREV), pressAnimationSpec, label = "pw")
-            Box(
-                Modifier.weight(prevWeight).fillMaxHeight().clip(CircleShape).background(colorPreviousButton)
-                    .clickable { lastClicked = Btn.PREV; clickTrigger++; scope.launch { delay(180); onPrevious() } },
-                contentAlignment = Alignment.Center
-            ) { Icon(imageVector = Icons.Rounded.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(iconSize), tint = tintPreviousIcon) }
-
-            // ── PLAY/PAUSE (animated smooth corners!) ──
-            val ppWeight by animateFloatAsState(weightFor(Btn.PP), pressAnimationSpec, label = "ppw")
-            val ppCorner by animateDpAsState(
-                if (!playPauseVisual) playPauseCornerPlaying else playPauseCornerPaused,
-                defaultSpatialDpSpec, label = "ppc"
-            )
-            Box(
-                Modifier.weight(ppWeight).fillMaxHeight().graphicsLayer {
-                    clip = true
-                    shape = AbsoluteSmoothCornerShape(
-                        cornerRadiusTL = ppCorner, smoothnessAsPercentTR = 60,
-                        cornerRadiusBL = ppCorner, smoothnessAsPercentTL = 60,
-                        cornerRadiusTR = ppCorner, smoothnessAsPercentBL = 60,
-                        cornerRadiusBR = ppCorner, smoothnessAsPercentBR = 60
-                    )
-                }.background(colorPlayPause)
-                    .clickable {
-                        lastClicked = Btn.PP; clickTrigger++
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlayPause()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (playPauseVisual) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = if (playPauseVisual) "Pause" else "Play",
-                    modifier = Modifier.size(playPauseIconSize),
-                    tint = tintPlayPauseIcon
-                )
-            }
-
-            // ── NEXT ──
-            val nextWeight by animateFloatAsState(weightFor(Btn.NEXT), pressAnimationSpec, label = "nw")
-            Box(
-                Modifier.weight(nextWeight).fillMaxHeight().clip(CircleShape).background(colorNextButton)
-                    .clickable { lastClicked = Btn.NEXT; clickTrigger++; scope.launch { delay(180); onNext() } },
-                contentAlignment = Alignment.Center
-            ) { Icon(imageVector = Icons.Rounded.SkipNext, contentDescription = "Next", modifier = Modifier.size(iconSize), tint = tintNextIcon) }
+    val isP = isPlayingProvider(); var last by remember { mutableStateOf<Btn?>(null) }; var trigger by remember { mutableStateOf(0) }
+    val latestIsPlaying by rememberUpdatedState(isPlayingProvider); val locked = last == Btn.NEXT || last == Btn.PREV
+    var visual by remember { mutableStateOf(isP) }; var pending by remember { mutableStateOf<Boolean?>(null) }
+    val haptic = LocalHapticFeedback.current; val scope = rememberCoroutineScope(); val spatialSpec = remember { MotionScheme.expressive().defaultSpatialSpec<Dp>() }
+    LaunchedEffect(last, trigger) { if (last != null) { delay(when (last) { Btn.NEXT, Btn.PREV -> 600L; else -> releaseDelay }); last = null } }
+    LaunchedEffect(isP) { if (isP) pending = true else { if (!latestIsPlaying()) { delay(releaseDelay); if (!latestIsPlaying()) pending = false } } }
+    LaunchedEffect(locked, pending) { if (!locked) pending?.let { visual = it; pending = null } }
+    Box(modifier.fillMaxWidth().height(height)) {
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            fun w(b: Btn) = when (last) { b -> 1.1f; null -> 1f; else -> 0.65f }
+            val pw by animateFloatAsState(w(Btn.PREV), pressAnimationSpec, label = "pw")
+            Box(Modifier.weight(pw).fillMaxHeight().clip(CircleShape).background(colorPrev).clickable { last = Btn.PREV; trigger++; scope.launch { delay(180); onPrevious() } }, contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Rounded.SkipPrevious, contentDescription = "Prev", tint = tintPrev, modifier = Modifier.size(iconSize)) }
+            val ppw by animateFloatAsState(w(Btn.PP), pressAnimationSpec, label = "ppw"); val ppc by animateDpAsState(if (!visual) ppCornerPlaying else ppCornerPaused, spatialSpec, label = "ppc")
+            Box(Modifier.weight(ppw).fillMaxHeight().graphicsLayer { clip = true; shape = AbsoluteSmoothCornerShape(ppc, 60, ppc, 60, ppc, 60, ppc, 60) }.background(colorPP).clickable { last = Btn.PP; trigger++; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlayPause() }, contentAlignment = Alignment.Center) { Icon(imageVector = if (visual) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = if (visual) "Pause" else "Play", tint = tintPP, modifier = Modifier.size(ppIconSize)) }
+            val nw by animateFloatAsState(w(Btn.NEXT), pressAnimationSpec, label = "nw")
+            Box(Modifier.weight(nw).fillMaxHeight().clip(CircleShape).background(colorNext).clickable { last = Btn.NEXT; trigger++; scope.launch { delay(180); onNext() } }, contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Rounded.SkipNext, contentDescription = "Next", tint = tintNext, modifier = Modifier.size(iconSize)) }
         }
     }
 }

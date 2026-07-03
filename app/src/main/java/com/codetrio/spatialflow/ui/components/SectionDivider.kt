@@ -7,12 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-@Composable
-fun SectionDivider(modifier: Modifier = Modifier) {
-    HorizontalDivider(modifier = modifier, thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+@Composable fun SectionDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(modifier, thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 }
-
-@Composable
-fun PaddedSectionDivider(modifier: Modifier = Modifier) {
-    SectionDivider(modifier = modifier.padding(horizontal = 16.dp))
+@Composable fun PaddedSectionDivider(modifier: Modifier = Modifier) {
+    SectionDivider(modifier.padding(horizontal = 16.dp))
 }
