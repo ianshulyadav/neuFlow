@@ -143,13 +143,22 @@ fun LibraryScreen(
         Column(Modifier.fillMaxSize().nestedScroll(nsc)) {
             Column(Modifier.fillMaxWidth().height(hh).graphicsLayer { alpha = prog }) {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = tabs[sel].label,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = scheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
+                Row(Modifier.padding(horizontal = 24.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = tabs[sel].label,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontFamily = GoogleSansRounded,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onBackground
+                    )
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { /* Open sort sheet or dialog */ }) {
+                        Icon(imageVector = Icons.Rounded.Sort, contentDescription = "Sort Options", tint = scheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = onConnectClick) {
+                        Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings", tint = scheme.onSurfaceVariant)
+                    }
+                }
                 Text(
                     text = tabs[sel].subtitle,
                     style = MaterialTheme.typography.bodyMedium,
@@ -270,7 +279,9 @@ fun LibraryScreen(
                                     viewModel.setSongList(combinedSongs)
                                     viewModel.playSongAtIndex(index)
                                 },
-                                onMoreOptions = onEditSong
+                                onMoreOptions = onEditSong,
+                                onPlayNext = { song -> viewModel.addToQueueNext(song) },
+                                onAddToQueue = { song -> viewModel.addToQueue(song) }
                             )
                         }
                     }

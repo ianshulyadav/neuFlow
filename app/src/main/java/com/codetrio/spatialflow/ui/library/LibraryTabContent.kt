@@ -27,8 +27,22 @@ import com.codetrio.spatialflow.ui.components.SongListItem
 import com.codetrio.spatialflow.ui.explore.AlbumCard
 import com.codetrio.spatialflow.ui.explore.ExploreItem
 
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.QueueMusic
+
 @Composable
-fun SongsContent(songs: List<SongItem>, currentSongId: String?, isPlaying: Boolean, onSongClick: (SongItem, Int) -> Unit, onMoreOptions: (SongItem) -> Unit, modifier: Modifier = Modifier) {
+fun SongsContent(
+    songs: List<SongItem>,
+    currentSongId: String?,
+    isPlaying: Boolean,
+    onSongClick: (SongItem, Int) -> Unit,
+    onMoreOptions: (SongItem) -> Unit,
+    onPlayNext: (SongItem) -> Unit,
+    onAddToQueue: (SongItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 80.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -37,8 +51,81 @@ fun SongsContent(songs: List<SongItem>, currentSongId: String?, isPlaying: Boole
                 AssistChip(onClick = {}, label = { Text("Downloaded") })
             }
         }
-        items(songs, key = { it.videoId ?: it.hashCode().toString() }) { song ->
-            SongListItem(song, song.videoId == currentSongId, isPlaying && song.videoId == currentSongId, true, { onSongClick(song, songs.indexOf(song)) }, { onMoreOptions(song) })
+        itemsIndexed(songs, key = { index, song -> "${song.videoId}_$index" }) { index, song ->
+            val dismissState = rememberSwipeToDismissBoxState(
+                confirmValueChange = { dismissValue ->
+                    when (dismissValue) {
+                        SwipeToDismissBoxValue.StartToEnd -> {
+                            onPlayNext(song)
+                            false
+                        }
+                        SwipeToDismissBoxValue.EndToStart -> {
+                            onAddToQueue(song)
+                            false
+                        }
+                        else -> false
+                    }
+                }
+            )
+
+            SwipeToDismissBox(
+                state = dismissState,
+                backgroundContent = {
+                    val color = when (dismissState.dismissDirection) {
+                        SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primaryContainer
+                        SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.secondaryContainer
+                        else -> Color.Transparent
+                    }
+                    val icon = when (dismissState.dismissDirection) {
+                        SwipeToDismissBoxValue.StartToEnd -> Icons.Rounded.SkipNext
+                        SwipeToDismissBoxValue.EndToStart -> Icons.Rounded.QueueMusic
+                        else -> null
+                    }
+                    val alignment = when (dismissState.dismissDirection) {
+                        SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                        SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                        else -> Alignment.Center
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(color.copy(alpha = dismissState.progress.coerceIn(0f, 1f))),
+                        contentAlignment = alignment
+                    ) {
+                        if (icon != null) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .padding(horizontal = 24.dp)
+                                    .graphicsLayer {
+                                        val p = dismissState.progress
+                                        scaleX = (p * 1.2f).coerceIn(0.6f, 1.1f)
+                                        scaleY = (p * 1.2f).coerceIn(0.6f, 1.1f)
+                                        alpha = p.coerceIn(0.3f, 1.0f)
+                                    },
+                                tint = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                }
+                            )
+                        }
+                    }
+                },
+                content = {
+                    SongListItem(
+                        song,
+                        song.videoId == currentSongId,
+                        isPlaying && song.videoId == currentSongId,
+                        true,
+                        { onSongClick(song, index) },
+                        { onMoreOptions(song) }
+                    )
+                }
+            )
         }
     }
 }
