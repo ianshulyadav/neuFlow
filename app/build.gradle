@@ -27,6 +27,7 @@ def isReleaseSigningReady = myKeystoreFile != null && myKeystorePassword != null
 android {
     namespace 'com.codetrio.spatialflow'
     compileSdk 37
+    ndkVersion "26.0.10792818"
 
     // Fix for "App not installed" errors when sharing debug APKs
     project.ext.set("android.injected.testOnly", "false")
@@ -75,8 +76,20 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    packagingOptions {
+        exclude 'META-INF/proguard/androidx-*.pro'
+        exclude 'META-INF/proguard/com-*.pro'
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+        freeCompilerArgs.addAll("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api", "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi", "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
     }
 }
 
@@ -131,7 +144,7 @@ dependencies {
     implementation libs.compose.runtime.livedata
     implementation libs.compose.ui.google.fonts
     implementation libs.compose.smooth.corner
-    implementation 'com.antonkarpenko:ffmpeg-kit-full-gpl:2.1.0'
+    implementation 'io.github.maitrungduc1410:ffmpeg-kit-https:6.0.1'
 
 
     testImplementation libs.junit

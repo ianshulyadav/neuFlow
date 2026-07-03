@@ -175,7 +175,7 @@ class MainActivity : AppCompatActivity() {
             val currentSong by playerViewModel.currentSong.collectAsStateWithLifecycle()
             val playerBackgroundColor by playerViewModel.playerBackgroundColor.collectAsStateWithLifecycle()
             val dynamicAlbumColor = if (currentSong != null) playerBackgroundColor else null
-            val albumColorSchemePair = dynamicAlbumColor?.let { generateColorSchemePair(it) }
+            val albumColorSchemePair = dynamicAlbumColor?.let { generateColorSchemePair(androidx.compose.ui.graphics.Color(it)) }
 
             SpatialFlowTheme(darkTheme = isDarkTheme, albumColorSchemePair = albumColorSchemePair) {
                 val hideNavLabels by prefs.observeKey("hide_nav_labels", false)

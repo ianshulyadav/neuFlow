@@ -1,5 +1,7 @@
 package com.codetrio.spatialflow.ui.player
 
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -52,7 +54,7 @@ import android.annotation.SuppressLint
 import com.codetrio.spatialflow.viewmodel.PlayerSharedViewModel
 import kotlin.math.abs
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SlidingQueueDrawer(
     isQueueExpanded: Boolean,
@@ -247,7 +249,13 @@ fun SlidingQueueDrawer(
                         contentType = { _, _ -> "queue-song" }
                     ) { index, song ->
                         val isPlaying = (index == currentSongIndex)
-                        val shapes = ListItemDefaults.segmentedShapes(index = index, count = songList.size)
+                        val cornerRadius = 12.dp
+                        val shape = when {
+                            songList.size <= 1 -> RoundedCornerShape(cornerRadius)
+                            index == 0 -> RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
+                            index == songList.size - 1 -> RoundedCornerShape(bottomStart = cornerRadius, bottomEnd = cornerRadius)
+                            else -> androidx.compose.ui.graphics.RectangleShape
+                        }
                         val isDragging = index == dragDropState.currentIndexOfDraggedItem
                         val displacement = if (isDragging) dragDropState.elementDisplacement ?: 0f else 0f
 
@@ -266,7 +274,7 @@ fun SlidingQueueDrawer(
                             QueueListItem(
                                 song = song,
                                 isPlaying = isPlaying,
-                                shapes = shapes,
+                                shape = shape,
                                 showReorderControls = true,
                                 dragDropState = if (isQueueExpanded) dragDropState else null,
                                 index = index,
@@ -453,7 +461,7 @@ fun SlidingQueueDrawer(
 fun QueueListItem(
     song: SongItem,
     isPlaying: Boolean,
-    shapes: ListItemShapes,
+    shape: androidx.compose.ui.graphics.Shape,
     showReorderControls: Boolean,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -465,8 +473,10 @@ fun QueueListItem(
     var showMenu by remember { mutableStateOf(false) }
 
     ListItem(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .clickable(onClick = onClick),
         leadingContent = {
             val albumArtModel = remember(song.videoId) { song.getAlbumArtUri() ?: R.drawable.default_album_art }
             Box(
@@ -499,7 +509,7 @@ fun QueueListItem(
                 }
             }
         },
-        content = {
+        headlineContent = {
             Text(
                 text = song.title,
                 fontWeight = if (isPlaying) FontWeight.ExtraBold else FontWeight.SemiBold,
@@ -579,7 +589,6 @@ fun QueueListItem(
                 }
             }
         },
-        shapes = shapes,
         colors = ListItemDefaults.colors(
             containerColor = if (isPlaying) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
